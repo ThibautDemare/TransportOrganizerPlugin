@@ -1,37 +1,5 @@
 package skill;
 
-/*
- * Copyright 2006 - 2016
- *     Stefan Balev     <stefan.balev@graphstream-project.org>
- *     Julien Baudry    <julien.baudry@graphstream-project.org>
- *     Antoine Dutot    <antoine.dutot@graphstream-project.org>
- *     Yoann Pigné      <yoann.pigne@graphstream-project.org>
- *     Guilhelm Savin   <guilhelm.savin@graphstream-project.org>
- * 
- * This file is part of GraphStream <http://graphstream-project.org>.
- * 
- * GraphStream is a library whose purpose is to handle static or dynamic
- * graph, create them from scratch, file or any source and display them.
- * 
- * This program is free software distributed under the terms of two licenses, the
- * CeCILL-C license that fits European law, and the GNU Lesser General Public
- * License. You can  use, modify and/ or redistribute the software under the terms
- * of the CeCILL-C license as circulated by CEA, CNRS and INRIA at the following
- * URL <http://www.cecill.info> or under the terms of the GNU LGPL as published by
- * the Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version.
- * 
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
- * 
- * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- * 
- * The fact that you are presently reading this means that you have had
- * knowledge of the CeCILL-C and LGPL licenses and that you accept their terms.
- */
-
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -45,115 +13,8 @@ import org.graphstream.graph.Graph;
 import org.graphstream.graph.Node;
 import org.graphstream.graph.Path;
 
-/**
- * <p>
- * Dijkstra's algorithm computes the shortest paths from a given node called
- * source to all the other nodes in a graph. It produces a shortest path tree
- * rooted in the source. <b>This algorithm works only for nonnegative
- * lengths.</b>
- * </p>
- * 
- * <p>
- * This implementation uses internally Fibonacci Heap, a data structure that
- * makes it run faster for big graphs.
- * </p>
- * 
- * <h3>Length of a path</h3>
- * 
- * <p>
- * Traditionally the length of a path is defined as the sum of the lengths of
- * its edges. This implementation allows to take into account also the "lengths"
- * of the nodes. This is done by a parameter of type {@link Element} passed in
- * the constructors.
- * </p>
- * 
- * <p>
- * The lengths of individual elements (edges or/and nodes) are defined using
- * another constructor parameter called {@code lengthAttribute}. If this
- * parameter is {@code null}, the elements are considered to have unit lengths.
- * In other words, the length of a path is the number of its edges or/and nodes.
- * If the parameter is not null, the elements are supposed to have a numeric
- * attribute named {@code lengthAttribute} used to store their lengths.
- * </p>
- * 
- * <h3>Solutions</h3>
- * 
- * <p>
- * Internal solution data is stored in attributes of the nodes of the underlying
- * graph. The name of this attribute is another constructor parameter called
- * {@code resultAttribute}. This name must be specified in order to avoid
- * conflicts with existing attributes, but also to distinguish between solutions
- * produced by different instances of this class working on the same graph (for
- * example when computing shortest paths from two different sources). If not
- * specified, a unique name is chosen automatically based on the hash code of
- * the Dijkstra instance. The attributes store opaque internal objects and must
- * not be accessed, modified or deleted. The only way to retrieve the solution
- * is using different solution access methods.
- * </p>
- * 
- * <h3>Usage</h3>
- * 
- * <p>
- * A typical usage of this class involves the following steps:
- * </p>
- * <ul>
- * <li>Instantiation using one of the constructors with appropriate parameters</li>
- * <li>Initialization of the algorithm using {@link #init(Graph)}</li>
- * <li>Computation of the shortest paths using {@link #compute()}</li>
- * <li>Retrieving the solution using different solution access methods</li>
- * <li>Cleaning up using {@link #clear()}</li>
- * </ul>
- * 
- * <p>
- * Note that if the graph changes after the call of {@link #compute()} the
- * computed solution is no longer valid. In this case the behavior of the
- * different solution access methods is undefined.
- * </p>
- * 
- * <h3>Example</h3>
- * 
- * <pre>
- * Graph graph = ...;
- * 
- * // Edge lengths are stored in an attribute called "length"
- * // The length of a path is the sum of the lengths of its edges
- * // The algorithm will store its results in attribute called "result"
- * Dijkstra dijkstra = new Dijkstra(Dijkstra.Element.edge, "result", "length");
- * 	
- * // Compute the shortest paths in g from A to all nodes
- * dijkstra.init(graph);
- * dijkstra.setSource(graph.getNode("A"));
- * dijkstra.compute();
- * 	
- * // Print the lengths of all the shortest paths
- * for (Node node : graph)
- *     System.out.printf("%s->%s:%6.2f%n", dijkstra.getSource(), node, dijkstra.getPathLength(node));
- * 	
- * // Color in blue all the nodes on the shortest path form A to B
- * for (Node node : dijkstra.getPathNodes(graph.getNode("B")))
- *     node.addAttribute("ui.style", "fill-color: blue;");
- * 	
- * // Color in red all the edges in the shortest path tree
- * for (Edge edge : dijkstra.getTreeEdges())
- *     edge.addAttribute("ui.style", "fill-color: red;");
- * 
- * // Print the shortest path from A to B
- * System.out.println(dijkstra.getPath(graph.getNode("B"));
- * 
- * // Build a list containing the nodes in the shortest path from A to B
- * // Note that nodes are added at the beginning of the list
- * // because the iterator traverses them in reverse order, from B to A
- * List &lt;Node&gt; list1 = new ArrayList&lt;Node&gt;();
- * for (Node node : dijkstra.getPathNodes(graph.getNode("B")))
- *     list1.add(0, node);
- * 
- * // A shorter but less efficient way to do the same thing
- * List&lt;Node&gt; list2 = dijkstra.getPath(graph.getNode("B")).getNodePath();
- * </pre>
- * 
- * @author Stefan Balev
- */
-public class Dijkstra extends AbstractSpanningTree {
+
+public class DijkstraComplexLength extends AbstractSpanningTree {
 	protected static class Data {
 		FibonacciHeap<Double, Node>.Node fn;
 		Edge edgeFromParent;
@@ -167,16 +28,12 @@ public class Dijkstra extends AbstractSpanningTree {
 	// *** Helpers ***
 
 	protected double getLength(Node source, Edge edge, Node dest) {
-		double lenght = 0;
-		lenght += numberProvider == null ? 1 : numberProvider.getEdgeCost(source, edge, dest);
-		if (lenght < 0)
+		double length = 0;
+		length += numberProvider == null ? 1 : numberProvider.getEdgeCost(source, edge, dest);
+		if (length < 0)
 			throw new IllegalStateException("Edge " + edge.getId()
-					+ " has negative lenght " + lenght);
-		return lenght;
-	}
-
-	protected interface NumberProvider {
-		public double getEdgeCost(Node source, Edge e, Node dest);
+					+ " has negative lenght " + length);
+		return length;
 	}
 
 	protected double getSourceLength() {
@@ -193,17 +50,9 @@ public class Dijkstra extends AbstractSpanningTree {
 	 *            nodes of the graph. If {@code null}, a unique name is chosen
 	 *            automatically.
 	 */
-	public Dijkstra(String resultAttribute,
+	public DijkstraComplexLength(String resultAttribute,
 			NumberProvider numberProvider) {
 		this(resultAttribute, numberProvider, null, null, null);
-	}
-
-	/**
-	 * Constructs an instance in which the length of the path is considered to
-	 * be the number of edges. Unique result attribute is chosen automatically. The edges of the shortest path tree are not tagged.
-	 */
-	public Dijkstra() {
-		this(null, null, null, null, null);
 	}
 	
 	/**
@@ -230,8 +79,8 @@ public class Dijkstra extends AbstractSpanningTree {
 	 *            value of the <i>flagAttribute</i> if edge is not in the
 	 *            spanning tree
 	 */
-	public Dijkstra(String resultAttribute, NumberProvider numberProvider, String flagAttribute, Object flagOn, Object flagOff) {
-		super(flagAttribute, flagOn, flagOff);
+	public DijkstraComplexLength(String resultAttribute, NumberProvider numberProvider, String flagAttribute, Object flagOn, Object flagOff) {
+		super("flagAttribute", "flagOn", "flagOff");
 		this.resultAttribute = resultAttribute == null ? toString()
 				+ "_result_" : resultAttribute;
 		this.numberProvider = numberProvider;
