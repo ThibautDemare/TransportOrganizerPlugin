@@ -105,6 +105,82 @@ public class TransportOrganizerSkill extends Skill{
 		return closestNode2;
 	}
 
+	private void initFileSink(){
+		// We save the graph in a DGS file (mostly for debug purpose but can be use for something else too)
+		fileSink = new FileSinkDGSFiltered();
+		multiModalNetwork.addSink(fileSink);
+		try {
+			String fileName = new File(new File("."), "../Model.v2/workspace-model/DALSim/results/DGS/multiModalNetwork.dgs").getCanonicalPath();
+			fileSink.begin(fileName);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		// Filter useless attributes in edges
+		fileSink.addEdgeAttributeFiltered("gama_agent");
+		fileSink.addEdgeAttributeFiltered("color");
+		fileSink.addEdgeAttributeFiltered("graphstream_edge");
+		fileSink.addEdgeAttributeFiltered("gama_time");
+		fileSink.addEdgeAttributeFiltered("gamaGraph");
+		fileSink.addEdgeAttributeFiltered("flagAttribute");
+		fileSink.addEdgeAttributeFiltered("Shape_Leng");
+		fileSink.addEdgeAttributeFiltered("cout_�");
+		fileSink.addEdgeAttributeFiltered("sur_gasoil");
+		fileSink.addEdgeAttributeFiltered("CO2");
+		fileSink.addEdgeAttributeFiltered("cout");
+		fileSink.addEdgeAttributeFiltered("dur�e_min");
+		fileSink.addEdgeAttributeFiltered("Long_km");
+		fileSink.addEdgeAttributeFiltered("RTT");
+		fileSink.addEdgeAttributeFiltered("RTN");
+		fileSink.addEdgeAttributeFiltered("RTE");
+		fileSink.addEdgeAttributeFiltered("RSU");
+		fileSink.addEdgeAttributeFiltered("RST");
+		fileSink.addEdgeAttributeFiltered("MED");
+		fileSink.addEdgeAttributeFiltered("LOC");
+		fileSink.addEdgeAttributeFiltered("EXS");
+		fileSink.addEdgeAttributeFiltered("SN");
+		fileSink.addEdgeAttributeFiltered("ICC");
+		fileSink.addEdgeAttributeFiltered("F_CODE");
+		fileSink.addEdgeAttributeFiltered("gfid");
+		fileSink.addEdgeAttributeFiltered("FCsubtype");
+		fileSink.addEdgeAttributeFiltered("OBJECTID_1");
+		fileSink.addEdgeAttributeFiltered("OBJECTID");
+
+		// Filter useless attributes in nodes
+		fileSink.addNodeAttributeFiltered("dijkstra_travel_time");
+		fileSink.addNodeAttributeFiltered("flagAttribute");
+		fileSink.addNodeAttributeFiltered("graphstream_node");
+		fileSink.addNodeAttributeFiltered("totalSurface");
+		fileSink.addNodeAttributeFiltered("probaAnt");
+		fileSink.addNodeAttributeFiltered("surface");
+		fileSink.addNodeAttributeFiltered("gama_agent");
+		fileSink.addNodeAttributeFiltered("id");
+		fileSink.addNodeAttributeFiltered("speed");
+		fileSink.addNodeAttributeFiltered("Id");
+		fileSink.addNodeAttributeFiltered("Nom");
+		fileSink.addNodeAttributeFiltered("Activit�");
+		fileSink.addNodeAttributeFiltered("co_ferro");
+		fileSink.addNodeAttributeFiltered("co_auto");
+		fileSink.addNodeAttributeFiltered("surf_stock");
+		fileSink.addNodeAttributeFiltered("cap_EVP_an");
+		fileSink.addNodeAttributeFiltered("INDEX_NO");
+		fileSink.addNodeAttributeFiltered("PORT_NAME");
+		fileSink.addNodeAttributeFiltered("TERMINAL_N");
+		fileSink.addNodeAttributeFiltered("COUNTRY");
+		fileSink.addNodeAttributeFiltered("LATITUDE");
+		fileSink.addNodeAttributeFiltered("LONGITUDE");
+		fileSink.addNodeAttributeFiltered("Date_de_MA");
+		fileSink.addNodeAttributeFiltered("TOC");
+
+		// No need to save graph attributes
+		fileSink.setNoFilterGraphAttributeAdded(false);
+		fileSink.setNoFilterGraphAttributeChanged(false);
+		fileSink.setNoFilterGraphAttributeRemoved(false);
+
+		// and no need either of result which contains Dijsktra reference
+		fileSink.addNodeAttributeFiltered("dijkstra_travel_time");
+		fileSink.addNodeAttributeFiltered("dijkstra_financial_costs");
+	}
 
 	/**
 	 * Takes a gama graph as an input, returns a graphstream graph as
@@ -210,67 +286,9 @@ public class TransportOrganizerSkill extends Skill{
 		multiModalNetwork = (Graph) scope.getSimulation().getAttribute("multiModalNetwork");
 		if(multiModalNetwork == null){
 			multiModalNetwork = new MultiGraph("multiModalNetwork", true, false); // TODO : verifier les parametres car le strict checking devrait être supprimé non?
+			dijkstras = new HashMap<String, DijkstraComplexLength>();
 			multiModalNetwork.display(false);
-			// We save the graph in a DGS file (mostly for debug purpose but can be use for something else too)
-			fileSink = new FileSinkDGSFiltered();
-			multiModalNetwork.addSink(fileSink);
-			try {
-				String fileName = new File(new File("."), "../Model.v2/workspace-model/DALSim/results/DGS/multiModalNetwork.dgs").getCanonicalPath();
-				fileSink.begin(fileName);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-
-			// Filter useless attributes in edges
-			fileSink.addEdgeAttributeFiltered("gama_agent");
-			fileSink.addEdgeAttributeFiltered("color");
-			fileSink.addEdgeAttributeFiltered("graphstream_edge");
-			fileSink.addEdgeAttributeFiltered("gama_time");
-			fileSink.addEdgeAttributeFiltered("gamaGraph");
-			fileSink.addEdgeAttributeFiltered("flagAttribute");
-			fileSink.addEdgeAttributeFiltered("col");
-			fileSink.addEdgeAttributeFiltered("Shape_Leng");
-			fileSink.addEdgeAttributeFiltered("cout_�");
-			fileSink.addEdgeAttributeFiltered("sur_gasoil");
-			fileSink.addEdgeAttributeFiltered("CO2");
-			fileSink.addEdgeAttributeFiltered("cout");
-			fileSink.addEdgeAttributeFiltered("dur�e_min");
-			fileSink.addEdgeAttributeFiltered("Long_km");
-			fileSink.addEdgeAttributeFiltered("RTT");
-			fileSink.addEdgeAttributeFiltered("RTN");
-			fileSink.addEdgeAttributeFiltered("RTE");
-			fileSink.addEdgeAttributeFiltered("RSU");
-			fileSink.addEdgeAttributeFiltered("RST");
-			fileSink.addEdgeAttributeFiltered("MED");
-			fileSink.addEdgeAttributeFiltered("LOC");
-			fileSink.addEdgeAttributeFiltered("EXS");
-			fileSink.addEdgeAttributeFiltered("SN");
-			fileSink.addEdgeAttributeFiltered("ICC");
-			fileSink.addEdgeAttributeFiltered("F_CODE");
-			fileSink.addEdgeAttributeFiltered("gfid");
-			fileSink.addEdgeAttributeFiltered("FCsubtype");
-			fileSink.addEdgeAttributeFiltered("OBJECTID_1");
-			fileSink.addEdgeAttributeFiltered("OBJECTID");
-
-			// Filter useless attributes in nodes
-			fileSink.addNodeAttributeFiltered("dijkstra_travel_time");
-			fileSink.addNodeAttributeFiltered("flagAttribute");
-			fileSink.addNodeAttributeFiltered("graphstream_node");
-			fileSink.addNodeAttributeFiltered("totalSurface");
-			fileSink.addNodeAttributeFiltered("probaAnt");
-			fileSink.addNodeAttributeFiltered("surface");
-			fileSink.addNodeAttributeFiltered("gama_agent");
-			fileSink.addNodeAttributeFiltered("id");
-			fileSink.addNodeAttributeFiltered("speed");
-
-			// No need to save graph attributes
-			fileSink.setNoFilterGraphAttributeAdded(false);
-			fileSink.setNoFilterGraphAttributeChanged(false);
-			fileSink.setNoFilterGraphAttributeRemoved(false);
-
-			// and no need either of result which contains Dijsktra reference
-			fileSink.addNodeAttributeFiltered("dijkstra_travel_time");
-			fileSink.addNodeAttributeFiltered("dijkstra_financial_costs");
+			initFileSink();
 		}
 		// Convert the gama network to a graphstream graph
 		convertGamaGraphToGraphstreamGraph(scope, getGamaGraph(scope), multiModalNetwork, getMode(scope));
@@ -337,10 +355,6 @@ public class TransportOrganizerSkill extends Skill{
 					examples = { @example("do compute_shortest_path origin:my_origin_agent destination:my_destination_agent strategy:'travel_time' volume:150 returns:my_returned_path;") })
 	)
 	public IList computeShortestPath(final IScope scope) throws GamaRuntimeException {
-		if(dijkstras == null){
-			dijkstras = new HashMap<String, DijkstraComplexLength>();
-		}
-
 		// First, we get the dijsktra we need (there is one dijsktra per strategy)
 		DijkstraComplexLength dijkstra;
 		String strategy = getStrategy(scope);
@@ -356,15 +370,11 @@ public class TransportOrganizerSkill extends Skill{
 			dijkstra.init(multiModalNetwork);
 			dijkstras.put("dijkstra_"+strategy, dijkstra);
 		}
-
 		//Get the graphstream source and target node
 		IAgent gamaSource = (IAgent) scope.getArg(IKeywordTOAdditional.ORIGIN, IType.AGENT);
 		Node sourceNode = (Node) gamaSource.getAttribute("graphstream_node");
-		sourceNode.addAttribute("ui.style", "fill-color:blue;");
 		IAgent gamaTarget = (IAgent) scope.getArg(IKeywordTOAdditional.DESTINATION, IType.AGENT);
 		Node targetNode = (Node) gamaTarget.getAttribute("graphstream_node");
-		targetNode.addAttribute("ui.style", "fill-color:green;");
-
 		// Compute and get the path
 		dijkstra.setSource(sourceNode);
 		dijkstra.compute();
