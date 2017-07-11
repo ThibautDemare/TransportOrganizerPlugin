@@ -32,7 +32,7 @@ public class DijkstraComplexLength extends AbstractSpanningTree {
 		length += numberProvider == null ? 1 : numberProvider.getEdgeCost(source, edge, dest);
 		if (length < 0)
 			throw new IllegalStateException("Edge " + edge.getId()
-					+ " has negative lenght " + length);
+					+ " has negative length " + length);
 		return length;
 	}
 
