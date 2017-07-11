@@ -1,5 +1,7 @@
 package skill;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -11,6 +13,7 @@ import org.graphstream.graph.IdAlreadyInUseException;
 import org.graphstream.graph.Node;
 import org.graphstream.graph.Path;
 import org.graphstream.graph.implementations.MultiGraph;
+import org.graphstream.stream.file.FileSinkDGSFiltered;
 
 import msi.gama.metamodel.agent.IAgent;
 import msi.gama.metamodel.shape.IShape;
@@ -40,24 +43,158 @@ import skill.NumberProvider;
 @skill(name = IKeywordTOAdditional.TRANSPORT_ORGANIZER)
 public class TransportOrganizerSkill extends Skill{
 
+	/*
+	 * Attributes
+	 */
+
 	private static Graph multiModalNetwork = null;
+	private static FileSinkDGSFiltered fileSink = null;
 	private static HashMap<String, DijkstraComplexLength> dijkstras;
 
-	private IGraph getGamaGraph(final IScope scope) {
+	/*
+	 * Static methods
+	 */
+
+	private static IGraph getGamaGraph(final IScope scope) {
 		return (IGraph) scope.getArg(IKeywordTOAdditional.NETWORK, IType.GRAPH);
 	}
 
-	private String getMode(final IScope scope) {
+	private static String getMode(final IScope scope) {
 		return (String) scope.getArg(IKeywordTOAdditional.MODE, IType.STRING);
 	}
 
-	private String getStrategy(final IScope scope) {
+	private static String getStrategy(final IScope scope) {
 		return (String) scope.getArg(IKeywordTOAdditional.STRATEGY, IType.STRING);
 	}
 
-	private IList getNodes(final IScope scope){
+	private static IList getNodes(final IScope scope){
 		return (IList) scope.getArg(IKeywordTOAdditional.NODES, IType.LIST);
 	}
+
+	/*
+	 * Tools
+	 */
+
+	private void flush() {
+		try {
+			fileSink.flush();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	 * Return the closest Graphstream node
+	 * @param scope
+	 * @param network
+	 * @param gamaNode
+	 * @param gsNode
+	 * @return
+	 */
+	private Node getClosestGSNode(final IScope scope, IGraph network, IAgent gamaNode, Node gsNode){
+		GraphTopology gt = (GraphTopology)(Cast.asTopology(scope, network));
+		ITopology topo = scope.getSimulation().getTopology();
+		IAgent closestEdge = topo.getAgentClosestTo(scope, gamaNode, In.edgesOf(gt.getPlaces()));
+		Edge gsClosestEdge = (Edge)closestEdge.getAttribute("graphstream_edge");
+		Node closestNode1 = gsClosestEdge.getNode0();
+		Node closestNode2 = gsClosestEdge.getNode1();
+		if(Math.hypot(gsNode.getNumber("x")-closestNode1.getNumber("x"), gsNode.getNumber("y")-closestNode1.getNumber("y")) <
+				Math.hypot(gsNode.getNumber("x")-closestNode2.getNumber("x"), gsNode.getNumber("y")-closestNode2.getNumber("y")) ){
+			return closestNode1;
+		}
+		return closestNode2;
+	}
+
+
+	/**
+	 * Takes a gama graph as an input, returns a graphstream graph as
+	 * close as possible. Preserves double links (multi graph).
+	 * Copy of the method of GraphUtilsGraphStream but we save the gama agent in each edges/nodes and the graphstream edge in each gama edge agent
+	 * @param gamaGraph
+	 * @return The Graphstream graph
+	 */
+	private void convertGamaGraphToGraphstreamGraph(IScope scope, final IGraph gamaGraph, Graph g, String graphType) {
+		Map<Object, Node> gamaNode2graphStreamNode = new HashMap<Object, Node>(gamaGraph._internalNodesSet().size());
+
+		// The GS graph keeps the list of the gama graph used in order to 
+		if(g.hasAttribute("listGamaGraph")){
+			((ArrayList<IGraph>)g.getAttribute("listGamaGraph")).add(gamaGraph);
+		}
+		else {
+			ArrayList<IGraph> l = new ArrayList<IGraph>();
+			l.add(gamaGraph);
+			g.addAttribute("listGamaGraph", l);
+		}
+
+		// add nodes
+		for ( Object v : gamaGraph._internalVertexMap().keySet() ) {
+			_Vertex vertex = (_Vertex) gamaGraph._internalVertexMap().get(v);
+			Node n = g.addNode(v.toString());
+			gamaNode2graphStreamNode.put(v, n);
+			if ( v instanceof IAgent ) {
+				IAgent a = (IAgent) v;
+				n.addAttribute("gama_agent", a);
+				n.addAttribute("gamaGraph", gamaGraph);
+				n.addAttribute("graph_type", graphType);
+				for ( Object key : a.getAttributes().keySet() ) {
+					Object value = GraphUtilsGraphStream.preprocessGamaValue(a.getAttributes().get(key));
+					if(value != null)
+						n.addAttribute(key.toString(), value.toString());
+				}
+			}
+
+			if ( v instanceof IShape ) {
+				IShape sh = (IShape) v;
+				n.setAttribute("x", sh.getLocation().getX());
+				n.setAttribute("y", sh.getLocation().getY()*-1);
+				n.setAttribute("z", sh.getLocation().getZ());
+			}
+		}
+
+		flush();
+
+		// add edges
+		for ( Object edgeObj : gamaGraph._internalEdgeMap().keySet() ) {
+			_Edge edge = (_Edge) gamaGraph._internalEdgeMap().get(edgeObj);
+			try {
+				Edge e = // We call the function where we give the nodes object directly, is it more efficient than give the string id? Because, if no, we don't need the "gamaNode2graphStreamNode" map...
+						g.addEdge(edgeObj.toString(), gamaNode2graphStreamNode.get(edge.getSource()), gamaNode2graphStreamNode.get(edge.getTarget()),
+								gamaGraph.isDirected() );// till now, directionality of an edge depends on the whole gama graph
+				if ( edgeObj instanceof IAgent ) {
+					IAgent a = (IAgent) edgeObj;
+					// e know a
+					e.addAttribute("gama_agent", a);
+					e.addAttribute("gamaGraph", gamaGraph);
+					e.addAttribute("graph_type", graphType);
+					for ( Object key : a.getAttributes().keySet() ) {
+						Object value = GraphUtilsGraphStream.preprocessGamaValue(a.getAttributes().get(key));
+						if(value != null)
+							e.addAttribute(key.toString(), value.toString());
+					}
+					//e.addAttribute("gama_time", e.getNumber(length_attribute) * e.getNumber(speed_attribute));
+					// a know e
+					a.setAttribute("graphstream_edge", e);
+				}
+			} catch (EdgeRejectedException e) {
+				((IAgent) edgeObj).setAttribute("col", "red");
+				//g.getEdge(edgeObj.toString()).addAttribute("ui.style", "fill-color:red");
+				GAMA.reportError(scope, GamaRuntimeException
+						.warning("an edge was rejected during the transformation, probably because it was a double one => id : "+((IAgent) edgeObj).getName(), scope),
+						true);
+			} catch (IdAlreadyInUseException e) {
+				((IAgent) edgeObj).setAttribute("col", "o");
+				GAMA.reportError(scope, GamaRuntimeException
+						.warning("an edge was rejected during the transformation, probably because it was a double one => id : "+((IAgent) edgeObj).getName(), scope),
+						true);
+			}
+		}
+
+		flush();
+	}
+
+	/*
+	 * Main methods
+	 */
 
 	@action(
 		name = "add_network",
@@ -74,9 +211,70 @@ public class TransportOrganizerSkill extends Skill{
 		if(multiModalNetwork == null){
 			multiModalNetwork = new MultiGraph("multiModalNetwork", true, false); // TODO : verifier les parametres car le strict checking devrait être supprimé non?
 			multiModalNetwork.display(false);
+			// We save the graph in a DGS file (mostly for debug purpose but can be use for something else too)
+			fileSink = new FileSinkDGSFiltered();
+			multiModalNetwork.addSink(fileSink);
+			try {
+				String fileName = new File(new File("."), "../Model.v2/workspace-model/DALSim/results/DGS/multiModalNetwork.dgs").getCanonicalPath();
+				fileSink.begin(fileName);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+
+			// Filter useless attributes in edges
+			fileSink.addEdgeAttributeFiltered("gama_agent");
+			fileSink.addEdgeAttributeFiltered("color");
+			fileSink.addEdgeAttributeFiltered("graphstream_edge");
+			fileSink.addEdgeAttributeFiltered("gama_time");
+			fileSink.addEdgeAttributeFiltered("gamaGraph");
+			fileSink.addEdgeAttributeFiltered("flagAttribute");
+			fileSink.addEdgeAttributeFiltered("col");
+			fileSink.addEdgeAttributeFiltered("Shape_Leng");
+			fileSink.addEdgeAttributeFiltered("cout_�");
+			fileSink.addEdgeAttributeFiltered("sur_gasoil");
+			fileSink.addEdgeAttributeFiltered("CO2");
+			fileSink.addEdgeAttributeFiltered("cout");
+			fileSink.addEdgeAttributeFiltered("dur�e_min");
+			fileSink.addEdgeAttributeFiltered("Long_km");
+			fileSink.addEdgeAttributeFiltered("RTT");
+			fileSink.addEdgeAttributeFiltered("RTN");
+			fileSink.addEdgeAttributeFiltered("RTE");
+			fileSink.addEdgeAttributeFiltered("RSU");
+			fileSink.addEdgeAttributeFiltered("RST");
+			fileSink.addEdgeAttributeFiltered("MED");
+			fileSink.addEdgeAttributeFiltered("LOC");
+			fileSink.addEdgeAttributeFiltered("EXS");
+			fileSink.addEdgeAttributeFiltered("SN");
+			fileSink.addEdgeAttributeFiltered("ICC");
+			fileSink.addEdgeAttributeFiltered("F_CODE");
+			fileSink.addEdgeAttributeFiltered("gfid");
+			fileSink.addEdgeAttributeFiltered("FCsubtype");
+			fileSink.addEdgeAttributeFiltered("OBJECTID_1");
+			fileSink.addEdgeAttributeFiltered("OBJECTID");
+
+			// Filter useless attributes in nodes
+			fileSink.addNodeAttributeFiltered("dijkstra_travel_time");
+			fileSink.addNodeAttributeFiltered("flagAttribute");
+			fileSink.addNodeAttributeFiltered("graphstream_node");
+			fileSink.addNodeAttributeFiltered("totalSurface");
+			fileSink.addNodeAttributeFiltered("probaAnt");
+			fileSink.addNodeAttributeFiltered("surface");
+			fileSink.addNodeAttributeFiltered("gama_agent");
+			fileSink.addNodeAttributeFiltered("id");
+			fileSink.addNodeAttributeFiltered("speed");
+
+			// No need to save graph attributes
+			fileSink.setNoFilterGraphAttributeAdded(false);
+			fileSink.setNoFilterGraphAttributeChanged(false);
+			fileSink.setNoFilterGraphAttributeRemoved(false);
+
+			// and no need either of result which contains Dijsktra reference
+			fileSink.addNodeAttributeFiltered("dijkstra_travel_time");
+			fileSink.addNodeAttributeFiltered("dijkstra_financial_costs");
 		}
 		// Convert the gama network to a graphstream graph
 		convertGamaGraphToGraphstreamGraph(scope, getGamaGraph(scope), multiModalNetwork, getMode(scope));
+		flush();
 		scope.getSimulation().setAttribute("multiModalNetwork", multiModalNetwork);
 	}
 
@@ -119,115 +317,12 @@ public class TransportOrganizerSkill extends Skill{
 				// Find the closest nodes in this network
 				Node node = getClosestGSNode(scope, network, multiModalNode, currentGSNode);
 				// Create an edge between the current GS node and these two other nodes
-				multiModalNetwork.addEdge(currentGSNode+"_"+node, currentGSNode, node);
+				Edge e = multiModalNetwork.addEdge(currentGSNode+"_"+node, currentGSNode, node);
+				e.addAttribute("length", Math.hypot(currentGSNode.getNumber("x")-node.getNumber("x"), currentGSNode.getNumber("y")-node.getNumber("y")));
+				e.addAttribute("speed", 10);
 			}
 		}
-	}
-
-	/**
-	 * Return the closest Graphstream node
-	 * @param scope
-	 * @param network
-	 * @param gamaNode
-	 * @param gsNode
-	 * @return
-	 */
-	private Node getClosestGSNode(final IScope scope, IGraph network, IAgent gamaNode, Node gsNode){
-		GraphTopology gt = (GraphTopology)(Cast.asTopology(scope, network));
-		ITopology topo = scope.getSimulation().getTopology();
-		IAgent closestEdge = topo.getAgentClosestTo(scope, gamaNode, In.edgesOf(gt.getPlaces()));
-		Edge gsClosestEdge = (Edge)closestEdge.getAttribute("graphstream_edge");
-		Node closestNode1 = gsClosestEdge.getNode0();
-		Node closestNode2 = gsClosestEdge.getNode1();
-		if(Math.hypot(gsNode.getNumber("x")-closestNode1.getNumber("x"), gsNode.getNumber("y")-closestNode1.getNumber("y")) <
-				Math.hypot(gsNode.getNumber("x")-closestNode2.getNumber("x"), gsNode.getNumber("y")-closestNode2.getNumber("y")) ){
-			return closestNode1;
-		}
-		return closestNode2;
-	}
-
-
-	/**
-	 * Takes a gama graph as an input, returns a graphstream graph as
-	 * close as possible. Preserves double links (multi graph).
-	 * Copy of the method of GraphUtilsGraphStream but we save the gama agent in each edges/nodes and the graphstream edge in each gama edge agent
-	 * @param gamaGraph
-	 * @return The Graphstream graph
-	 */
-	private static void convertGamaGraphToGraphstreamGraph(IScope scope, final IGraph gamaGraph, Graph g, String graphType) {
-		Map<Object, Node> gamaNode2graphStreamNode = new HashMap<Object, Node>(gamaGraph._internalNodesSet().size());
-
-		// The GS graph keeps the list of the gama graph used in order to 
-		if(g.hasAttribute("listGamaGraph")){
-			((ArrayList<IGraph>)g.getAttribute("listGamaGraph")).add(gamaGraph);
-		}
-		else {
-			ArrayList<IGraph> l = new ArrayList<IGraph>();
-			l.add(gamaGraph);
-			g.addAttribute("listGamaGraph", l);
-		}
-
-		// add nodes
-		for ( Object v : gamaGraph._internalVertexMap().keySet() ) {
-			_Vertex vertex = (_Vertex) gamaGraph._internalVertexMap().get(v);
-			Node n = g.addNode(v.toString());
-			gamaNode2graphStreamNode.put(v, n);
-			if ( v instanceof IAgent ) {
-				IAgent a = (IAgent) v;
-				n.addAttribute("gama_agent", a);
-				n.addAttribute("gamaGraph", gamaGraph);
-				n.addAttribute("graph_type", graphType);
-				for ( Object key : a.getAttributes().keySet() ) {
-					Object value = GraphUtilsGraphStream.preprocessGamaValue(a.getAttributes().get(key));
-					if(value != null)
-						n.addAttribute(key.toString(), value.toString());
-				}
-			}
-
-			if ( v instanceof IShape ) {
-				IShape sh = (IShape) v;
-				n.setAttribute("x", sh.getLocation().getX());
-				n.setAttribute("y", sh.getLocation().getY()*-1);
-				n.setAttribute("z", sh.getLocation().getZ());
-			}
-		}
-
-		// add edges
-		for ( Object edgeObj : gamaGraph._internalEdgeMap().keySet() ) {
-			_Edge edge = (_Edge) gamaGraph._internalEdgeMap().get(edgeObj);
-			try {
-				Edge e = // We call the function where we give the nodes object directly, is it more efficient than give the string id? Because, if no, we don't need the "gamaNode2graphStreamNode" map...
-						g.addEdge(edgeObj.toString(), gamaNode2graphStreamNode.get(edge.getSource()), gamaNode2graphStreamNode.get(edge.getTarget()),
-								gamaGraph.isDirected() );// till now, directionality of an edge depends on the whole gama graph
-				if ( edgeObj instanceof IAgent ) {
-					IAgent a = (IAgent) edgeObj;
-					// e know a
-					e.addAttribute("gama_agent", a);
-					e.addAttribute("gamaGraph", gamaGraph);
-					e.addAttribute("graph_type", graphType);
-					for ( Object key : a.getAttributes().keySet() ) {
-						Object value = GraphUtilsGraphStream.preprocessGamaValue(a.getAttributes().get(key));
-						if(value != null)
-							e.addAttribute(key.toString(), value.toString());
-					}
-					//e.addAttribute("gama_time", e.getNumber(length_attribute) * e.getNumber(speed_attribute));
-					// a know e
-					a.setAttribute("graphstream_edge", e);
-				}
-			} catch (EdgeRejectedException e) {
-				((IAgent) edgeObj).setAttribute("col", "red");
-				//g.getEdge(edgeObj.toString()).addAttribute("ui.style", "fill-color:red");
-				GAMA.reportError(scope, GamaRuntimeException
-						.warning("an edge was rejected during the transformation, probably because it was a double one => id : "+((IAgent) edgeObj).getName(), scope),
-						true);
-			} catch (IdAlreadyInUseException e) {
-				((IAgent) edgeObj).setAttribute("col", "o");
-				GAMA.reportError(scope, GamaRuntimeException
-						.warning("an edge was rejected during the transformation, probably because it was a double one => id : "+((IAgent) edgeObj).getName(), scope),
-						true);
-			}
-
-		}
+		flush();
 	}
 
 	@action(
@@ -264,24 +359,20 @@ public class TransportOrganizerSkill extends Skill{
 
 		//Get the graphstream source and target node
 		IAgent gamaSource = (IAgent) scope.getArg(IKeywordTOAdditional.ORIGIN, IType.AGENT);
-		System.out.println("gamaSource : "+gamaSource.getName());
 		Node sourceNode = (Node) gamaSource.getAttribute("graphstream_node");
-		System.out.println("source node : "+sourceNode);
 		sourceNode.addAttribute("ui.style", "fill-color:blue;");
 		IAgent gamaTarget = (IAgent) scope.getArg(IKeywordTOAdditional.DESTINATION, IType.AGENT);
-		System.out.println("gamaTarget : "+gamaTarget.getName());
 		Node targetNode = (Node) gamaTarget.getAttribute("graphstream_node");
 		targetNode.addAttribute("ui.style", "fill-color:green;");
-		System.out.println("target node : "+targetNode);
+
 		// Compute and get the path
 		dijkstra.setSource(sourceNode);
 		dijkstra.compute();
+		flush();
 		Path p = dijkstra.getPath(targetNode);
-		System.out.println("p.getNodeCount() : "+p.getNodeCount());
 		// Construct the output list
 		IList path = GamaListFactory.create();
 		for(Node n : p.getEachNode()){
-			n.addAttribute("ui.style", "fill-color:red;");
 			if(n.hasAttribute("graphstream_node"))
 				path.add(n.getAttribute("gama_agent"));
 		}
