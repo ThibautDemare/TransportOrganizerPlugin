@@ -20,7 +20,7 @@ import skill.NumberProvider;
 public class Test {
 	public static void main(String args[]) throws IOException, ElementNotFoundException, GraphParseException{
 		MultiGraph multiModalNetwork = new MultiGraph("multiModalNetwork", true, false); // TODO : verifier les parametres car le strict checking devrait être supprimé non?
-		multiModalNetwork.display(true);
+		multiModalNetwork.display(false);
 		String fileName = new File(new File("."), "../../../workspace-model/DALSim/results/DGS/multiModalNetwork.dgs").getCanonicalPath();
 		multiModalNetwork.read(fileName);
 		for(Edge e : multiModalNetwork.getEachEdge())
@@ -29,12 +29,26 @@ public class Test {
 		DijkstraComplexLength dijkstra = new DijkstraComplexLength("travel_time", new TravelTime());
 //		DijkstraComplexLength dijkstra = new DijkstraComplexLength("financial_costs", new FinancialCosts());
 		dijkstra.init(multiModalNetwork);
-	
+
+		for(Node n : multiModalNetwork.getEachNode()){
+			if(n.hasAttribute("col"))
+				n.addAttribute("ui.style", "size:3px;");
+			else
+				n.addAttribute("ui.style", "size:1px;fill-color:black;");
+		}
+
+		for(Edge n : multiModalNetwork.getEachEdge()){
+			if(n.hasAttribute("col"))
+				n.addAttribute("ui.style", "size:3px;fill-color:"+n.getAttribute("col")+";");
+			else
+				n.addAttribute("ui.style", "size:3px;fill-color:grey;");
+		}
+
 		//Get the graphstream source and target node
 		Node sourceNode = multiModalNetwork.getNode("Provider0");//Toolkit.randomNode(multiModalNetwork);
-		sourceNode.addAttribute("ui.style", "fill-color:blue;");
-		Node targetNode = multiModalNetwork.getNode("Warehouse52");//Toolkit.randomNode(multiModalNetwork);
-		targetNode.addAttribute("ui.style", "fill-color:green;");
+		sourceNode.addAttribute("ui.style", "size:3px;fill-color:blue;");
+		Node targetNode = multiModalNetwork.getNode("Warehouse2782");//Toolkit.randomNode(multiModalNetwork);
+		targetNode.addAttribute("ui.style", "size:3px;fill-color:green;");
 
 		// Compute and get the path
 		dijkstra.setSource(sourceNode);
@@ -42,6 +56,9 @@ public class Test {
 		Path p = dijkstra.getPath(targetNode);
 		// Construct the output list
 		for(Node n : p.getEachNode()){
+			n.addAttribute("ui.style", "fill-color:red;");
+		}
+		for(Edge n : p.getEachEdge()){
 			n.addAttribute("ui.style", "fill-color:red;");
 		}
 	}
