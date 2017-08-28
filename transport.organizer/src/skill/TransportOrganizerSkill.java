@@ -110,7 +110,7 @@ public class TransportOrganizerSkill extends Skill{
 		fileSink = new FileSinkDGSFiltered();
 		multiModalNetwork.addSink(fileSink);
 		try {
-			String fileName = new File(new File("."), "../Model.v2/workspace-model/DALSim/results/DGS/multiModalNetwork.dgs").getCanonicalPath();
+			String fileName = new File(new File("."), "../workspace-model/DALSim/results/DGS/multiModalNetwork.dgs").getCanonicalPath();
 			fileSink.begin(fileName);
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -150,6 +150,7 @@ public class TransportOrganizerSkill extends Skill{
 		fileSink.addNodeAttributeFiltered("dijkstra_travel_time");
 		fileSink.addNodeAttributeFiltered("flagAttribute");
 		fileSink.addNodeAttributeFiltered("graphstream_node");
+		fileSink.addNodeAttributeFiltered("gamaGraph");
 		fileSink.addNodeAttributeFiltered("totalSurface");
 		fileSink.addNodeAttributeFiltered("probaAnt");
 		fileSink.addNodeAttributeFiltered("surface");
@@ -207,11 +208,11 @@ public class TransportOrganizerSkill extends Skill{
 			_Vertex vertex = (_Vertex) gamaGraph._internalVertexMap().get(v);
 			Node n = g.addNode(v.toString());
 			gamaNode2graphStreamNode.put(v, n);
+			n.addAttribute("gamaGraph", gamaGraph);
+			n.addAttribute("graph_type", graphType);
 			if ( v instanceof IAgent ) {
 				IAgent a = (IAgent) v;
 				n.addAttribute("gama_agent", a);
-				n.addAttribute("gamaGraph", gamaGraph);
-				n.addAttribute("graph_type", graphType);
 				for ( Object key : a.getAttributes().keySet() ) {
 					Object value = GraphUtilsGraphStream.preprocessGamaValue(a.getAttributes().get(key));
 					if(value != null)
@@ -336,8 +337,9 @@ public class TransportOrganizerSkill extends Skill{
 				Node node = getClosestGSNode(scope, network, multiModalNode, currentGSNode);
 				// Create an edge between the current GS node and these two other nodes
 				Edge e = multiModalNetwork.addEdge(currentGSNode+"_"+node, currentGSNode, node);
-				e.addAttribute("length", Math.hypot(currentGSNode.getNumber("x")-node.getNumber("x"), currentGSNode.getNumber("y")-node.getNumber("y")));
+				e.addAttribute("length", Math.hypot(currentGSNode.getNumber("x")-node.getNumber("x"), currentGSNode.getNumber("y")-node.getNumber("y")) / 1000); // Hypot returns a measure in meter. I want km.
 				e.addAttribute("speed", 10);
+				e.addAttribute("graph_type", ""+node.getAttribute("graph_type"));
 			}
 		}
 		flush();
