@@ -30,11 +30,12 @@ public class Test {
 //		DijkstraComplexLength dijkstra = new DijkstraComplexLength("financial_costs", new FinancialCosts());
 		dijkstra.init(multiModalNetwork);
 
+		// Reset style
 		for(Node n : multiModalNetwork.getEachNode()){
 			if(n.hasAttribute("col"))
 				n.addAttribute("ui.style", "size:3px;");
 			else
-				n.addAttribute("ui.style", "size:1px;fill-color:black;");
+				n.addAttribute("ui.style", "size:3px;fill-color:black;");
 		}
 
 		for(Edge n : multiModalNetwork.getEachEdge()){
@@ -47,7 +48,7 @@ public class Test {
 		//Get the graphstream source and target node
 		Node sourceNode = multiModalNetwork.getNode("Provider0");//Toolkit.randomNode(multiModalNetwork);
 		sourceNode.addAttribute("ui.style", "size:3px;fill-color:blue;");
-		Node targetNode = multiModalNetwork.getNode("Warehouse2782");//Toolkit.randomNode(multiModalNetwork);
+		Node targetNode = Toolkit.randomNode(multiModalNetwork);//multiModalNetwork.getNode("Warehouse2782");//
 		targetNode.addAttribute("ui.style", "size:3px;fill-color:green;");
 
 		// Compute and get the path
