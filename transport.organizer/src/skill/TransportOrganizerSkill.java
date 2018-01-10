@@ -1,10 +1,14 @@
 package skill;
 
+import java.awt.Color;
 import java.io.File;
 import java.io.IOException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import org.graphstream.graph.Edge;
 import org.graphstream.graph.EdgeRejectedException;
@@ -28,6 +32,7 @@ import msi.gama.precompiler.GamlAnnotations.skill;
 import msi.gama.runtime.GAMA;
 import msi.gama.runtime.IScope;
 import msi.gama.runtime.exceptions.GamaRuntimeException;
+import msi.gama.util.GamaDate;
 import msi.gama.util.GamaListFactory;
 import msi.gama.util.IList;
 import msi.gama.util.graph.GraphUtilsGraphStream;
@@ -54,6 +59,10 @@ public class TransportOrganizerSkill extends Skill{
 	/*
 	 * Static methods
 	 */
+
+	public IAgent getTransporter(final IScope scope, String graphType){
+		return (IAgent) getCurrentAgent(scope).getAttribute("transporter_"+graphType);
+	}
 
 	private static IGraph getGamaGraph(final IScope scope) {
 		return (IGraph) scope.getArg(IKeywordTOAdditional.NETWORK, IType.GRAPH);
@@ -95,7 +104,7 @@ public class TransportOrganizerSkill extends Skill{
 		GraphTopology gt = (GraphTopology)(Cast.asTopology(scope, network));
 		ITopology topo = scope.getSimulation().getTopology();
 		IAgent closestEdge = topo.getAgentClosestTo(scope, gamaNode, In.edgesOf(gt.getPlaces()));
-		Edge gsClosestEdge = (Edge)closestEdge.getAttribute("graphstream_edge");
+		Edge gsClosestEdge = (Edge)closestEdge.getAttribute("graphstream_edge_"+gsNode.getGraph().getId());
 		Node closestNode1 = gsClosestEdge.getNode0();
 		Node closestNode2 = gsClosestEdge.getNode1();
 		if(Math.hypot(gsNode.getNumber("x")-closestNode1.getNumber("x"), gsNode.getNumber("y")-closestNode1.getNumber("y")) <
@@ -250,7 +259,7 @@ public class TransportOrganizerSkill extends Skill{
 					}
 					//e.addAttribute("gama_time", e.getNumber(length_attribute) * e.getNumber(speed_attribute));
 					// a know e
-					a.setAttribute("graphstream_edge", e);
+					a.setAttribute("graphstream_edge_"+g.getId(), e);
 				}
 			} catch (EdgeRejectedException e) {
 				((IAgent) edgeObj).setAttribute("col", "red");
@@ -278,47 +287,60 @@ public class TransportOrganizerSkill extends Skill{
 		args = {
 				@arg(name = IKeywordTOAdditional.NETWORK, type = IType.GRAPH , optional = false, doc = @doc("the GAMA graph which needs to be added.")),
 				@arg(name = IKeywordTOAdditional.MODE, type = IType.STRING , optional = false, doc = @doc("Which mode of transport is this network (road, maritime,...).")),
+				@arg(name = IKeywordTOAdditional.NODES, type = IType.LIST , optional = false, doc = @doc("The list of multi modal nodes which are connected to this network."))
 		},
 		doc =
-		@doc(value = "Add a network to the multi-modal one.", examples = { @example("do add_network network:my_network mode:'river';") })
+		@doc(value = "Add a network to the multi-modal one. You need to add first the road network.", examples = { @example("do add_network network:my_network mode:'road' nodes:my_nodes;") })
 	)
 	public void addMode(final IScope scope) throws GamaRuntimeException {
-		// Do I need to init the multiModalNetwork ?
-		multiModalNetwork = (Graph) scope.getSimulation().getAttribute("multiModalNetwork");
-		if(multiModalNetwork == null){
-			multiModalNetwork = new MultiGraph("multiModalNetwork", true, false); // TODO : verifier les parametres car le strict checking devrait être supprimé non?
+		IList nodes = (IList) scope.getArg(IKeywordTOAdditional.NODES, IType.LIST);
+		String mode = (String) scope.getArg(IKeywordTOAdditional.MODE, IType.STRING);
+		if(getMode(scope).equals("road")){
+			/*
+			Si réseau routier passé en param :
+				on crée l'objet multiModalNetwork
+				on converti le graphe GAMA et on met tout ça dans multiModalNetwork
+				on connecte en plus les noeuds passés en param à ce graph
+			*/
+			multiModalNetwork = new MultiGraph("main", false, false);
 			dijkstras = new HashMap<String, DijkstraComplexLength>();
 			multiModalNetwork.display(false);
 			initFileSink();
+			convertGamaGraphToGraphstreamGraph(scope, getGamaGraph(scope), multiModalNetwork, getMode(scope));
+			createGSNode(nodes, multiModalNetwork, "main");
+			connectNodesToNetwork(scope, nodes, getGamaGraph(scope), "main");
 		}
-		// Convert the gama network to a graphstream graph
-		convertGamaGraphToGraphstreamGraph(scope, getGamaGraph(scope), multiModalNetwork, getMode(scope));
+		else {
+			/*
+			Sinon
+				on crée un nouveau graph dans lequel on met le graphe GAMA converti
+				on connecte en plus les noeuds passés en param à ce graphe
+				on stock ce graph dans les nœeuds passé en param
+				on ajoute les nœeuds passés en param à multiModalNetwork
+				on connecte entre eux les nœuds passés en param
+			*/
+			Graph subnetwork = new MultiGraph(mode, true, false);
+			subnetwork.display(false);
+			convertGamaGraphToGraphstreamGraph(scope, getGamaGraph(scope), subnetwork, getMode(scope));
+			createGSNode(nodes, subnetwork, mode);
+			connectNodesToNetwork(scope, nodes, getGamaGraph(scope), mode);
+			createGSNode(nodes, multiModalNetwork, "main");
+			connectMultimodalNodesDirectly(scope, nodes);
+		}
 		flush();
 		scope.getSimulation().setAttribute("multiModalNetwork", multiModalNetwork);
 	}
 
-	@action(
-		name = "connect_nodes",
-		args = {
-				@arg(name = IKeywordTOAdditional.NODES, type = IType.LIST , optional = false, 
-						doc = @doc("The list of nodes (agents) who connect the two networks.")),
-				@arg(name = IKeywordTOAdditional.NETWORKS, type = IType.LIST , optional = false, 
-						doc = @doc("The list of networks.")),
-		},
-		doc =
-		@doc(value = "Connect some nodes to some networks.", examples = { @example("do connect_networks nodes:my_agents networks:my_networks;") })
-	)
-	public void addNodes(final IScope scope) throws GamaRuntimeException {
-		IList nodes = getNodes(scope);
+	private void createGSNode(IList nodes, Graph graph, String mode){
 		for(int i = 0; i<nodes.size(); i++){
 			IAgent multiModalNode = (IAgent) nodes.get(i);
-
-			// We first create (if needed) a graphstream node corresponding to the current gama agent
-			Node currentGSNode = (Node) multiModalNode.getAttribute("graphstream_node");
+			// We create (if needed) a graphstream node corresponding to the current gama agent
+			Node currentGSNode = (Node) multiModalNode.getAttribute("graphstream_node_"+mode);
 			if(currentGSNode == null){
-				currentGSNode = multiModalNetwork.addNode(multiModalNode.toString());
+				currentGSNode = graph.addNode(multiModalNode.toString());
 				currentGSNode.addAttribute("gama_agent", multiModalNode);
-				multiModalNode.setAttribute("graphstream_node", currentGSNode);
+				currentGSNode.addAttribute("multiModalNode", true);
+				multiModalNode.setAttribute("graphstream_node_"+mode, currentGSNode);
 				for ( Object key : multiModalNode.getAttributes().keySet() ) {
 					Object value = GraphUtilsGraphStream.preprocessGamaValue(multiModalNode.getAttributes().get(key));
 					if(value != null)
@@ -328,18 +350,44 @@ public class TransportOrganizerSkill extends Skill{
 				currentGSNode.setAttribute("y", multiModalNode.getLocation().getY()*-1);
 				currentGSNode.setAttribute("z", multiModalNode.getLocation().getZ());
 			}
+		}
+	}
 
-			// Then we connect this new node to the other networks
-			IList listNetworks = (IList) scope.getArg(IKeywordTOAdditional.NETWORKS, IType.LIST);
-			for(int j = 0; j < listNetworks.size(); j++){
-				IGraph network = (IGraph) listNetworks.get(j);
-				// Find the closest nodes in this network
-				Node node = getClosestGSNode(scope, network, multiModalNode, currentGSNode);
-				// Create an edge between the current GS node and these two other nodes
-				Edge e = multiModalNetwork.addEdge(currentGSNode+"_"+node, currentGSNode, node);
-				e.addAttribute("length", Math.hypot(currentGSNode.getNumber("x")-node.getNumber("x"), currentGSNode.getNumber("y")-node.getNumber("y")) / 1000); // Hypot returns a measure in meter. I want km.
-				e.addAttribute("speed", 10);
-				e.addAttribute("graph_type", ""+node.getAttribute("graph_type"));
+	private void connectNodesToNetwork(IScope scope, IList nodes, IGraph network, String mode) {
+		for(int i = 0; i<nodes.size(); i++){
+			IAgent multiModalNode = (IAgent) nodes.get(i);
+			// We get the graphstream node corresponding to the current gama agent
+			Node currentGSNode = (Node) multiModalNode.getAttribute("graphstream_node_"+mode);
+			// Then we connect this new node to the network
+			// Find the closest nodes in this network
+			Node node = getClosestGSNode(scope, network, multiModalNode, currentGSNode);
+			// Create an edge between the current GS node and these two other nodes
+			Edge e = currentGSNode.getGraph().addEdge(currentGSNode+"_"+node, currentGSNode, node);
+			e.addAttribute("length", Math.hypot(currentGSNode.getNumber("x")-node.getNumber("x"), currentGSNode.getNumber("y")-node.getNumber("y")) / 1000); // Hypot returns a measure in meter. I want km.
+			e.addAttribute("speed", 10);
+			e.addAttribute("graph_type", ""+node.getAttribute("graph_type"));
+		}
+		flush();
+	}
+
+	private void connectMultimodalNodesDirectly(IScope scope, IList nodes) {
+		// We give different color for the different modes of transport
+		Random random = new Random();
+		final float hue = random.nextFloat();
+		final float saturation = 0.9f;//1.0 for brilliant, 0.0 for dull
+		final float luminance = 1.0f; //1.0 for brighter, 0.0 for black
+		Color color = Color.getHSBColor(hue, saturation, luminance);
+		// We connect each multi modal node to the other ones
+		for(int i = 0; i<nodes.size(); i++){
+			IAgent gamaAgent1 = (IAgent) nodes.get(i);
+			// We get the graphstream node corresponding to the current gama agent
+			Node gsNode1 = multiModalNetwork.getNode(gamaAgent1.toString());
+			for(int j = 0; j<nodes.size(); j++){
+				IAgent gamaAgent2 = (IAgent) nodes.get(j);
+				// We get the graphstream node corresponding to the current gama agent
+				Node gsNode2 = multiModalNetwork.getNode(gamaAgent2.toString());
+				Edge e = multiModalNetwork.addEdge(gsNode1.getId()+"_"+gsNode2.getId(), gsNode1, gsNode2);
+				e.addAttribute("ui.style", "fill-color: rgb("+color.getRed()+","+color.getGreen()+","+color.getBlue()+");");
 			}
 		}
 		flush();
@@ -351,7 +399,7 @@ public class TransportOrganizerSkill extends Skill{
 				@arg(name = IKeywordTOAdditional.ORIGIN, type = IType.AGENT , optional = false, doc = @doc("the location or entity towards which to move.")),
 				@arg(name = IKeywordTOAdditional.DESTINATION, type = IType.AGENT , optional = false, doc = @doc("the location or entity towards which to move.")),
 				@arg(name = IKeywordTOAdditional.STRATEGY, type = IType.STRING , optional = false, doc = @doc("The strategy used by the agent to compute the shortest path. Among: 'travel_time' and 'financial_costs'.")),
-				@arg(name = IKeywordTOAdditional.VOLUME, type = IType.FLOAT , optional = false, doc = @doc("the location or entity towards which to move.")),
+				@arg(name = IKeywordTOAdditional.COMMODITY, type = IType.AGENT , optional = false, doc = @doc("the location or entity towards which to move.")),
 		},
 		doc =	@doc(value = "Compute a shortest path between two nodes.", returns = "the path with the list of multi-modal nodes.", 
 					examples = { @example("do compute_shortest_path origin:my_origin_agent destination:my_destination_agent strategy:'travel_time' volume:150 returns:my_returned_path;") })
@@ -365,7 +413,7 @@ public class TransportOrganizerSkill extends Skill{
 		}
 		else{
 			if(strategy.equals("travel_time")){
-				dijkstra = new DijkstraComplexLength("dijkstra_"+strategy, new TravelTime(scope));
+				dijkstra = new DijkstraComplexLength("dijkstra_"+strategy, new TravelTime(this, scope));
 			}else{
 				dijkstra = new DijkstraComplexLength("dijkstra_"+strategy, new FinancialCosts());
 			}
@@ -379,23 +427,62 @@ public class TransportOrganizerSkill extends Skill{
 		Node targetNode = (Node) gamaTarget.getAttribute("graphstream_node");
 		// Compute and get the path
 		dijkstra.setSource(sourceNode);
-		dijkstra.compute();
+		dijkstra.compute((double)((IAgent) scope.getArg(IKeywordTOAdditional.COMMODITY, IType.AGENT)).getAttribute("volume"));
 		flush();
 		Path p = dijkstra.getPath(targetNode);
-		// Construct the output list
+		// Construct the output list with intermodal nodes and networks between them
 		IList path = GamaListFactory.create();
-		for(Node n : p.getEachNode()){
-			if(n.hasAttribute("graphstream_node"))
+		boolean isNodeFound = false;
+		Node foundNode = null;
+		List<Node> nodes = p.getNodePath();
+		for(int i = 0; i < nodes.size(); i++){
+			Node n =nodes.get(i);
+			n.addAttribute("ui.style", "fill-color:red;");
+			if(isNodeFound){
+				path.add(n.getAttribute("gamaGraph"));
+				isNodeFound = false;
+				if(i < nodes.size()-1){
+					Node destination = null;
+					int j = i + 1;
+					while(j < nodes.size() && destination == null){
+						if(nodes.get(j).hasAttribute("graphstream_node")){
+							destination = nodes.get(j);
+						}
+						j++;
+					}
+					GamaDate departureDate = scope.getClock().getCurrentDate() // and when does it leave.
+							.plusMillis((double)((IAgent)foundNode.getAttribute("gama_agent")).getAttribute("handling_time_to_"+n.getAttribute("graph_type"))*3600*1000)
+							.plusMillis(dijkstra.getPathLength(foundNode)*3600*1000);
+					if(departureDate.getSecond() != 0){
+						departureDate.plus(60-departureDate.getSecond(), ChronoUnit.SECONDS);
+					}
+					if(departureDate.getMinute() != 0 ){
+						departureDate.plus(60-departureDate.getMinute(), ChronoUnit.MINUTES);
+					}
+					TransporterSkill.registerDepartureDate(
+						scope,
+						getTransporter(scope, nodes.get(i).getAttribute("graph_type")),// The network on which the vehicle move
+						(IAgent) scope.getArg(IKeywordTOAdditional.COMMODITY, IType.AGENT), // The goods to carry
+						foundNode,// The node from which the vehicle move
+						destination, // the destination of this vehicle
+						departureDate
+					);
+				}
+			}
+			else if(n.hasAttribute("graphstream_node")){
 				path.add(n.getAttribute("gama_agent"));
+				foundNode = n;
+				isNodeFound = true;
+			}
 		}
 		return path;
 		// retourne une liste contenant la suite des noeuds multi-modaux par lesquels il faut passer et entre chaque noeud, le graph qu'il faut emprunter
 		
 		// strategy:
-	//			temps de trajet -> le cout de traversé d'une arête correspond à la longueur * la vitesse du véhicule mais il faut aussi rajouter au temps de trajet, le temps de manutention au sein des nœuds+ éventuellement le temps d'attente du départ du véhicule
-	//			coût financier -> le cout de traversé d'une arête correspond à la longueur * volume de marchandise * cout km.volume du véhicule mais il faut aussi rajouter au temps de trajet, le temps de manutention au sein des nœuds
-	//			moins cher à échéance
-	//			coût carbone ?? => TODO one day
+		//			temps de trajet -> le cout de traversé d'une arête correspond à la longueur * la vitesse du véhicule mais il faut aussi rajouter au temps de trajet, le temps de manutention au sein des nœuds+ éventuellement le temps d'attente du départ du véhicule
+		//			coût financier -> le cout de traversé d'une arête correspond à la longueur * volume de marchandise * cout km.volume du véhicule mais il faut aussi rajouter au temps de trajet, le temps de manutention au sein des nœuds
+		//			moins cher à échéance
+		//			coût carbone ?? => TODO one day
 	
 	}
 }
