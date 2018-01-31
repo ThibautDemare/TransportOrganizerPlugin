@@ -46,7 +46,7 @@ import skill.NumberProvider;
 
 @doc("This skill is intended to manage a multi-modal network. It means create it and compute shortest paths on it.")
 @skill(name = IKeywordTOAdditional.TRANSPORT_ORGANIZER)
-public class TransportOrganizerSkill extends Skill{
+public class TransportOrganizerSkill extends Skill {
 
 	/*
 	 * Attributes
@@ -54,7 +54,7 @@ public class TransportOrganizerSkill extends Skill{
 
 	private static Graph multiModalNetwork = null;
 	private static FileSinkDGSFiltered fileSink = null;
-	private static HashMap<String, DijkstraComplexLength> dijkstras;
+	private static HashMap<String, MultiModalDijkstra> dijkstras;
 
 	/*
 	 * Static methods
@@ -202,16 +202,8 @@ public class TransportOrganizerSkill extends Skill{
 	private void convertGamaGraphToGraphstreamGraph(IScope scope, final IGraph gamaGraph, Graph g, String graphType) {
 		Map<Object, Node> gamaNode2graphStreamNode = new HashMap<Object, Node>(gamaGraph._internalNodesSet().size());
 
-		// The GS graph keeps the list of the gama graph used in order to 
-		if(g.hasAttribute("listGamaGraph")){
-			((ArrayList<IGraph>)g.getAttribute("listGamaGraph")).add(gamaGraph);
-		}
-		else {
-			ArrayList<IGraph> l = new ArrayList<IGraph>();
-			l.add(gamaGraph);
-			g.addAttribute("listGamaGraph", l);
-		}
-
+		g.addAttribute("gamaGraph", gamaGraph);
+		
 		// add nodes
 		for ( Object v : gamaGraph._internalVertexMap().keySet() ) {
 			_Vertex vertex = (_Vertex) gamaGraph._internalVertexMap().get(v);
@@ -293,26 +285,21 @@ public class TransportOrganizerSkill extends Skill{
 		@doc(value = "Add a network to the multi-modal one. You need to add first the road network.", examples = { @example("do add_network network:my_network mode:'road' nodes:my_nodes;") })
 	)
 	public void addMode(final IScope scope) throws GamaRuntimeException {
-		IList nodes = (IList) scope.getArg(IKeywordTOAdditional.NODES, IType.LIST);
-		String mode = (String) scope.getArg(IKeywordTOAdditional.MODE, IType.STRING);
-		if(getMode(scope).equals("road")){
+		try {
+			IList nodes = (IList) scope.getArg(IKeywordTOAdditional.NODES, IType.LIST);
+			String mode = (String) scope.getArg(IKeywordTOAdditional.MODE, IType.STRING);
+			
+			if(multiModalNetwork == null){
+				/*
+				Si le réseau de nœud multi n'a pas encore été créé
+					on crée l'objet multiModalNetwork
+				*/
+				multiModalNetwork = new MultiGraph("main", true, false);
+				//multiModalNetwork.display(false);
+				dijkstras = new HashMap<String, MultiModalDijkstra>();
+				initFileSink();
+			}
 			/*
-			Si réseau routier passé en param :
-				on crée l'objet multiModalNetwork
-				on converti le graphe GAMA et on met tout ça dans multiModalNetwork
-				on connecte en plus les noeuds passés en param à ce graph
-			*/
-			multiModalNetwork = new MultiGraph("main", false, false);
-			dijkstras = new HashMap<String, DijkstraComplexLength>();
-			multiModalNetwork.display(false);
-			initFileSink();
-			convertGamaGraphToGraphstreamGraph(scope, getGamaGraph(scope), multiModalNetwork, getMode(scope));
-			createGSNode(nodes, multiModalNetwork, "main");
-			connectNodesToNetwork(scope, nodes, getGamaGraph(scope), "main");
-		}
-		else {
-			/*
-			Sinon
 				on crée un nouveau graph dans lequel on met le graphe GAMA converti
 				on connecte en plus les noeuds passés en param à ce graphe
 				on stock ce graph dans les nœeuds passé en param
@@ -320,24 +307,76 @@ public class TransportOrganizerSkill extends Skill{
 				on connecte entre eux les nœuds passés en param
 			*/
 			Graph subnetwork = new MultiGraph(mode, true, false);
-			subnetwork.display(false);
+			//subnetwork.display(false);
 			convertGamaGraphToGraphstreamGraph(scope, getGamaGraph(scope), subnetwork, getMode(scope));
-			createGSNode(nodes, subnetwork, mode);
-			connectNodesToNetwork(scope, nodes, getGamaGraph(scope), mode);
-			createGSNode(nodes, multiModalNetwork, "main");
-			connectMultimodalNodesDirectly(scope, nodes);
+			connectMultiModalNodesToSubnetwork(scope, nodes, getGamaGraph(scope), subnetwork, mode);
+			connectMultiModalNodesToMainNetwork(nodes, subnetwork, mode);
+			flush();
+			scope.getSimulation().setAttribute("multiModalNetwork", multiModalNetwork);
 		}
-		flush();
-		scope.getSimulation().setAttribute("multiModalNetwork", multiModalNetwork);
+		catch(Exception e){
+			e.printStackTrace();
+		}
 	}
 
-	private void createGSNode(IList nodes, Graph graph, String mode){
+	private void connectMultiModalNodesToMainNetwork(IList nodes, Graph graph, String mode){
+		// First we create the nodes
 		for(int i = 0; i<nodes.size(); i++){
 			IAgent multiModalNode = (IAgent) nodes.get(i);
-			// We create (if needed) a graphstream node corresponding to the current gama agent
+			// We get (or create if needed) the graphstream node of the multimodal network corresponding to the current gama agent
+			Node currentGSNode = (Node) multiModalNode.getAttribute("graphstream_node_main");
+			if(currentGSNode == null){
+				currentGSNode = multiModalNetwork.addNode(multiModalNode.toString());
+				currentGSNode.addAttribute("gama_agent", multiModalNode);
+				currentGSNode.addAttribute("multiModalNode", true);
+				multiModalNode.setAttribute("graphstream_node_main", currentGSNode);
+				for ( Object key : multiModalNode.getAttributes().keySet() ) {
+					Object value = GraphUtilsGraphStream.preprocessGamaValue(multiModalNode.getAttributes().get(key));
+					if(value != null)
+						currentGSNode.addAttribute(key.toString(), value.toString());
+				}
+				currentGSNode.setAttribute("x", multiModalNode.getLocation().getX());
+				currentGSNode.setAttribute("y", multiModalNode.getLocation().getY()*-1);
+				currentGSNode.setAttribute("z", multiModalNode.getLocation().getZ());
+			}
+			if(!currentGSNode.hasAttribute("modes"))
+					currentGSNode.addAttribute("modes", new ArrayList());
+			((ArrayList)currentGSNode.getAttribute("modes")).add(graph);
+		}
+		// Then we connect them
+		// We give different color for the different modes of transport
+		Random random = new Random();
+		final float hue = random.nextFloat();
+		final float saturation = 0.9f;//1.0 for brilliant, 0.0 for dull
+		final float luminance = 1.0f; //1.0 for brighter, 0.0 for black
+		Color color = Color.getHSBColor(hue, saturation, luminance);
+		// We connect each multi modal node to the other ones
+		for(int i = 0; i<nodes.size(); i++){
+			IAgent gamaAgent1 = (IAgent) nodes.get(i);
+			// Warehouse are not connected together
+			if(!gamaAgent1.getName().contains("Warehouse")){
+				// We get the graphstream node corresponding to the current gama agent
+				Node gsNode1 = multiModalNetwork.getNode(gamaAgent1.toString());
+				for(int j = 0; j<nodes.size(); j++){
+					IAgent gamaAgent2 = (IAgent) nodes.get(j);
+					// We get the graphstream node corresponding to the current gama agent
+					Node gsNode2 = multiModalNetwork.getNode(gamaAgent2.toString());
+					Edge e = multiModalNetwork.addEdge(gsNode1.getId()+"_"+gsNode2.getId()+"_"+mode, gsNode1, gsNode2);
+					e.addAttribute("subnetwork", graph);
+					//e.addAttribute("ui.style", "fill-color: rgb("+color.getRed()+","+color.getGreen()+","+color.getBlue()+");");
+				}
+			}
+		}
+		flush();
+	}
+
+	private void connectMultiModalNodesToSubnetwork(IScope scope, IList nodes, IGraph network, Graph subnetwork, String mode) {
+		for(int i = 0; i<nodes.size(); i++){
+			IAgent multiModalNode = (IAgent) nodes.get(i);
+			// We get the graphstream node corresponding to the current gama agent
 			Node currentGSNode = (Node) multiModalNode.getAttribute("graphstream_node_"+mode);
 			if(currentGSNode == null){
-				currentGSNode = graph.addNode(multiModalNode.toString());
+				currentGSNode = subnetwork.addNode(multiModalNode.toString());
 				currentGSNode.addAttribute("gama_agent", multiModalNode);
 				currentGSNode.addAttribute("multiModalNode", true);
 				multiModalNode.setAttribute("graphstream_node_"+mode, currentGSNode);
@@ -350,14 +389,6 @@ public class TransportOrganizerSkill extends Skill{
 				currentGSNode.setAttribute("y", multiModalNode.getLocation().getY()*-1);
 				currentGSNode.setAttribute("z", multiModalNode.getLocation().getZ());
 			}
-		}
-	}
-
-	private void connectNodesToNetwork(IScope scope, IList nodes, IGraph network, String mode) {
-		for(int i = 0; i<nodes.size(); i++){
-			IAgent multiModalNode = (IAgent) nodes.get(i);
-			// We get the graphstream node corresponding to the current gama agent
-			Node currentGSNode = (Node) multiModalNode.getAttribute("graphstream_node_"+mode);
 			// Then we connect this new node to the network
 			// Find the closest nodes in this network
 			Node node = getClosestGSNode(scope, network, multiModalNode, currentGSNode);
@@ -370,7 +401,7 @@ public class TransportOrganizerSkill extends Skill{
 		flush();
 	}
 
-	private void connectMultimodalNodesDirectly(IScope scope, IList nodes) {
+	private void connectMultimodalNodesDirectly(IScope scope, IList nodes, Graph network) {
 		// We give different color for the different modes of transport
 		Random random = new Random();
 		final float hue = random.nextFloat();
@@ -380,14 +411,18 @@ public class TransportOrganizerSkill extends Skill{
 		// We connect each multi modal node to the other ones
 		for(int i = 0; i<nodes.size(); i++){
 			IAgent gamaAgent1 = (IAgent) nodes.get(i);
-			// We get the graphstream node corresponding to the current gama agent
-			Node gsNode1 = multiModalNetwork.getNode(gamaAgent1.toString());
-			for(int j = 0; j<nodes.size(); j++){
-				IAgent gamaAgent2 = (IAgent) nodes.get(j);
+			// Warehouse are not connected together
+			if(!gamaAgent1.getName().contains("Warehouse")){
 				// We get the graphstream node corresponding to the current gama agent
-				Node gsNode2 = multiModalNetwork.getNode(gamaAgent2.toString());
-				Edge e = multiModalNetwork.addEdge(gsNode1.getId()+"_"+gsNode2.getId(), gsNode1, gsNode2);
-				e.addAttribute("ui.style", "fill-color: rgb("+color.getRed()+","+color.getGreen()+","+color.getBlue()+");");
+				Node gsNode1 = multiModalNetwork.getNode(gamaAgent1.toString());
+				for(int j = 0; j<nodes.size(); j++){
+					IAgent gamaAgent2 = (IAgent) nodes.get(j);
+					// We get the graphstream node corresponding to the current gama agent
+					Node gsNode2 = multiModalNetwork.getNode(gamaAgent2.toString());
+					Edge e = multiModalNetwork.addEdge(gsNode1.getId()+"_"+gsNode2.getId(), gsNode1, gsNode2);
+					e.addAttribute("subnetwork", network);
+					//e.addAttribute("ui.style", "fill-color: rgb("+color.getRed()+","+color.getGreen()+","+color.getBlue()+");");
+				}
 			}
 		}
 		flush();
@@ -406,25 +441,25 @@ public class TransportOrganizerSkill extends Skill{
 	)
 	public IList computeShortestPath(final IScope scope) throws GamaRuntimeException {
 		// First, we get the dijsktra we need (there is one dijsktra per strategy)
-		DijkstraComplexLength dijkstra;
+		MultiModalDijkstra dijkstra;
 		String strategy = getStrategy(scope);
 		if(dijkstras.containsKey("dijkstra_"+strategy)){
 			dijkstra = dijkstras.get("dijkstra_"+strategy);
 		}
 		else{
 			if(strategy.equals("travel_time")){
-				dijkstra = new DijkstraComplexLength("dijkstra_"+strategy, new TravelTime(this, scope));
+				dijkstra = new MultiModalDijkstra("dijkstra_"+strategy, new TravelTime(this, scope));
 			}else{
-				dijkstra = new DijkstraComplexLength("dijkstra_"+strategy, new FinancialCosts());
+				dijkstra = new MultiModalDijkstra("dijkstra_"+strategy, new FinancialCosts());
 			}
 			dijkstra.init(multiModalNetwork);
 			dijkstras.put("dijkstra_"+strategy, dijkstra);
 		}
 		//Get the graphstream source and target node
 		IAgent gamaSource = (IAgent) scope.getArg(IKeywordTOAdditional.ORIGIN, IType.AGENT);
-		Node sourceNode = (Node) gamaSource.getAttribute("graphstream_node");
+		Node sourceNode = (Node) gamaSource.getAttribute("graphstream_node_main");
 		IAgent gamaTarget = (IAgent) scope.getArg(IKeywordTOAdditional.DESTINATION, IType.AGENT);
-		Node targetNode = (Node) gamaTarget.getAttribute("graphstream_node");
+		Node targetNode = (Node) gamaTarget.getAttribute("graphstream_node_main");
 		// Compute and get the path
 		dijkstra.setSource(sourceNode);
 		dijkstra.compute((double)((IAgent) scope.getArg(IKeywordTOAdditional.COMMODITY, IType.AGENT)).getAttribute("volume"));
@@ -432,47 +467,42 @@ public class TransportOrganizerSkill extends Skill{
 		Path p = dijkstra.getPath(targetNode);
 		// Construct the output list with intermodal nodes and networks between them
 		IList path = GamaListFactory.create();
-		boolean isNodeFound = false;
-		Node foundNode = null;
 		List<Node> nodes = p.getNodePath();
+		List<Edge> edges = p.getEdgePath();
+
+		System.out.println("nodes.size() : "+nodes.size());
+		System.out.println("dijkstra.getPathLength(targetNode) : "+dijkstra.getPathLength(targetNode));
+
 		for(int i = 0; i < nodes.size(); i++){
-			Node n =nodes.get(i);
-			n.addAttribute("ui.style", "fill-color:red;");
-			if(isNodeFound){
-				path.add(n.getAttribute("gamaGraph"));
-				isNodeFound = false;
-				if(i < nodes.size()-1){
-					Node destination = null;
-					int j = i + 1;
-					while(j < nodes.size() && destination == null){
-						if(nodes.get(j).hasAttribute("graphstream_node")){
-							destination = nodes.get(j);
-						}
-						j++;
-					}
-					GamaDate departureDate = scope.getClock().getCurrentDate() // and when does it leave.
-							.plusMillis((double)((IAgent)foundNode.getAttribute("gama_agent")).getAttribute("handling_time_to_"+n.getAttribute("graph_type"))*3600*1000)
-							.plusMillis(dijkstra.getPathLength(foundNode)*3600*1000);
-					if(departureDate.getSecond() != 0){
-						departureDate.plus(60-departureDate.getSecond(), ChronoUnit.SECONDS);
-					}
-					if(departureDate.getMinute() != 0 ){
-						departureDate.plus(60-departureDate.getMinute(), ChronoUnit.MINUTES);
-					}
-					TransporterSkill.registerDepartureDate(
-						scope,
-						getTransporter(scope, nodes.get(i).getAttribute("graph_type")),// The network on which the vehicle move
-						(IAgent) scope.getArg(IKeywordTOAdditional.COMMODITY, IType.AGENT), // The goods to carry
-						foundNode,// The node from which the vehicle move
-						destination, // the destination of this vehicle
-						departureDate
-					);
+			Node n = nodes.get(i);
+//			n.addAttribute("ui.style", "fill-color:red;");
+//			if(i<edges.size())
+//				edges.get(i).addAttribute("ui.style", "fill-color:red;");
+//			((IAgent)n.getAttribute("gama_agent")).setAttribute("colorValue", 0);
+			
+			// We build the returned path with the multi modal nodes and the graphs between them that must be followed by the goods
+			path.add(n.getAttribute("gama_agent"));
+			if(i < nodes.size()-1){
+				path.add(((Graph)edges.get(i).getAttribute("subnetwork")).getAttribute("gamaGraph"));
+				
+				String graphType = ((Graph)edges.get(i).getAttribute("subnetwork")).getId();
+				GamaDate departureDate = scope.getClock().getCurrentDate() // and when does it leave.
+						.plusMillis((double)((IAgent)n.getAttribute("gama_agent")).getAttribute("handling_time_to_"+graphType)*3600*1000)
+						.plusMillis(dijkstra.getPathLength(n)*3600*1000);
+				if(departureDate.getSecond() != 0){
+					departureDate.plus(60-departureDate.getSecond(), ChronoUnit.SECONDS);
 				}
-			}
-			else if(n.hasAttribute("graphstream_node")){
-				path.add(n.getAttribute("gama_agent"));
-				foundNode = n;
-				isNodeFound = true;
+				if(departureDate.getMinute() != 0 ){
+					departureDate.plus(60-departureDate.getMinute(), ChronoUnit.MINUTES);
+				}
+				TransporterSkill.registerDepartureDate(
+					scope,
+					getTransporter(scope, graphType),// The network on which the vehicle move
+					(IAgent) scope.getArg(IKeywordTOAdditional.COMMODITY, IType.AGENT), // The goods to carry
+					n,// The node from which the vehicle move
+					nodes.get(i+1), // the destination of this vehicle
+					departureDate
+				);
 			}
 		}
 		return path;
@@ -483,6 +513,5 @@ public class TransportOrganizerSkill extends Skill{
 		//			coût financier -> le cout de traversé d'une arête correspond à la longueur * volume de marchandise * cout km.volume du véhicule mais il faut aussi rajouter au temps de trajet, le temps de manutention au sein des nœuds
 		//			moins cher à échéance
 		//			coût carbone ?? => TODO one day
-	
 	}
 }

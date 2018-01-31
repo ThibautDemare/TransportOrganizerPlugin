@@ -1,6 +1,7 @@
 package skill;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -14,7 +15,7 @@ import org.graphstream.graph.Node;
 import org.graphstream.graph.Path;
 
 
-public class DijkstraComplexLength extends AbstractSpanningTree {
+public class SubDijkstra extends AbstractSpanningTree {
 	protected static class Data {
 		FibonacciHeap<Double, Node>.Node fn;
 		Edge edgeFromParent;
@@ -27,9 +28,9 @@ public class DijkstraComplexLength extends AbstractSpanningTree {
 
 	// *** Helpers ***
 
-	protected double getLength(Node source, Edge edge, Node dest) {
+	protected double getLength(Node source, Edge edge, Node dest, double currentDistance, double volume, Node multiModalSource) {
 		double length = 0;
-		length += numberProvider == null ? 1 : numberProvider.getEdgeCost(source, edge, dest);
+		length += numberProvider == null ? 1 : numberProvider.getEdgeCost(source, edge, dest, currentDistance, volume, multiModalSource);
 		if (length < 0)
 			throw new IllegalStateException("Edge " + edge.getId()
 					+ " has negative length " + length);
@@ -50,7 +51,7 @@ public class DijkstraComplexLength extends AbstractSpanningTree {
 	 *            nodes of the graph. If {@code null}, a unique name is chosen
 	 *            automatically.
 	 */
-	public DijkstraComplexLength(String resultAttribute,
+	public SubDijkstra(String resultAttribute,
 			NumberProvider numberProvider) {
 		this(resultAttribute, numberProvider, null, null, null);
 	}
@@ -79,7 +80,7 @@ public class DijkstraComplexLength extends AbstractSpanningTree {
 	 *            value of the <i>flagAttribute</i> if edge is not in the
 	 *            spanning tree
 	 */
-	public DijkstraComplexLength(String resultAttribute, NumberProvider numberProvider, String flagAttribute, Object flagOn, Object flagOff) {
+	public SubDijkstra(String resultAttribute, NumberProvider numberProvider, String flagAttribute, Object flagOn, Object flagOff) {
 		super("flagAttribute", "flagOn", "flagOff");
 		this.resultAttribute = resultAttribute == null ? toString()
 				+ "_result_" : resultAttribute;
@@ -148,8 +149,7 @@ public class DijkstraComplexLength extends AbstractSpanningTree {
 	 *             the number of edges and <em>n</em> is the number of nodes in
 	 *             the graph.
 	 */
-	@Override
-	public void compute() {
+	public void compute(double volume) {
 		// check if computation can start
 		if (graph == null)
 			throw new IllegalStateException(
@@ -158,11 +158,15 @@ public class DijkstraComplexLength extends AbstractSpanningTree {
 			throw new IllegalStateException(
 					"No source specified. Call setSource() first.");
 		resetFlags();
-		makeTree();
+		makeTree(volume);
 	}
 	
 	@Override
 	protected void makeTree() {
+		makeTree(1.);
+	}
+
+	protected void makeTree(double volume) {
 		// initialization
 		FibonacciHeap<Double, Node> heap = new FibonacciHeap<Double, Node>();
 		for (Node node : graph) {
@@ -173,7 +177,6 @@ public class DijkstraComplexLength extends AbstractSpanningTree {
 			data.edgeFromParent = null;
 			node.addAttribute(resultAttribute, data);
 		}
-
 		// main loop
 		while (!heap.isEmpty()) {
 			Node u = heap.extractMin();
@@ -187,13 +190,23 @@ public class DijkstraComplexLength extends AbstractSpanningTree {
 				Data dataV = v.getAttribute(resultAttribute);
 				if (dataV.fn == null)
 					continue;
-				double tryDist = dataU.distance + getLength(u, e, v);
+				double tryDist;
+				if(!u.hasAttribute("multiModalNode") && u.getAttribute("multimodalSource") == null)
+					tryDist = dataU.distance;
+				else
+					tryDist = dataU.distance + getLength(u, e, v, dataU.distance, volume, u.hasAttribute("multiModalNode")?u:u.getAttribute("multimodalSource"));
 				if (tryDist < dataV.fn.getKey()) {
+					if(u.hasAttribute("multiModalNode")){
+						v.addAttribute("multimodalSource", u);
+					}
+					else {
+						v.addAttribute("multimodalSource", (Node) u.getAttribute("multimodalSource"));
+					};
 					dataV.edgeFromParent = e;
 					heap.decreaseKey(dataV.fn, tryDist);
 				}
 			}
-		}		
+		}
 	}
 
 	// *** Iterators ***
@@ -256,6 +269,7 @@ public class DijkstraComplexLength extends AbstractSpanningTree {
 		protected List<Node> nodes;
 		protected List<Iterator<Edge>> iterators;
 		protected Path nextPath;
+		protected double volume;
 
 		protected void extendPathStep() {
 			int last = nodes.size() - 1;
@@ -265,7 +279,7 @@ public class DijkstraComplexLength extends AbstractSpanningTree {
 			while (it.hasNext()) {
 				Edge e = it.next();
 				Node u = e.getOpposite(v);
-				if (getPathLength(u) + getLength(u, e, v) == lengthV) {
+				if (getPathLength(u) + getLength(u, e, v, getPathLength(u), volume, v.getAttribute("multiModalSource")) == lengthV) {
 					nodes.add(u);
 					iterators.add(u.getEnteringEdgeIterator());
 					return;
@@ -292,9 +306,10 @@ public class DijkstraComplexLength extends AbstractSpanningTree {
 						nodes.get(i - 1).getId()));
 		}
 
-		public PathIterator(Node target) {
+		public PathIterator(Node target, double volume) {
 			nodes = new ArrayList<Node>();
 			iterators = new ArrayList<Iterator<Edge>>();
+			this.volume = volume;
 			if (Double.isInfinite(getPathLength(target))) {
 				nextPath = null;
 				return;
@@ -384,13 +399,16 @@ public class DijkstraComplexLength extends AbstractSpanningTree {
 	 * @complexity O(<em>n</em>) where <em>n</em> is the number of nodes is the
 	 *             graph.
 	 */
-	public double getTreeLength() {
+	public double getTreeLength(double volume) {
 		double length = getSourceLength();
+		Node previousMultiModalNode = source;
 		for (Edge edge : getTreeEdges()) {
 			Node node = edge.getNode0();
 			if (getEdgeFromParent(node) != edge)
 				node = edge.getNode1();
-			length += getLength(edge.getOpposite(node), edge, node);
+			length += getLength(edge.getOpposite(node), edge, node, length, volume, previousMultiModalNode);
+			if(node.hasAttribute("multiModalNode"))
+				previousMultiModalNode = node;
 		}
 		return length;
 	}
@@ -530,8 +548,8 @@ public class DijkstraComplexLength extends AbstractSpanningTree {
 	 *             iterator takes O(<em>m</em>) time in the worst case, where
 	 *             <em>m</em> is the number of edges in the graph
 	 */
-	public Iterator<Path> getAllPathsIterator(Node target) {
-		return new PathIterator(target);
+	public Iterator<Path> getAllPathsIterator(Node target, double volume) {
+		return new PathIterator(target, volume);
 	}
 
 	/**
@@ -544,10 +562,10 @@ public class DijkstraComplexLength extends AbstractSpanningTree {
 	 *         target
 	 * @see #getAllPathsIterator(Node)
 	 */
-	public Iterable<Path> getAllPaths(final Node target) {
+	public Iterable<Path> getAllPaths(final Node target, double volume) {
 		return new Iterable<Path>() {
 			public Iterator<Path> iterator() {
-				return getAllPathsIterator(target);
+				return getAllPathsIterator(target, volume);
 			}
 		};
 	}
