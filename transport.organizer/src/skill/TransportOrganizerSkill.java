@@ -358,12 +358,14 @@ public class TransportOrganizerSkill extends Skill {
 				// We get the graphstream node corresponding to the current gama agent
 				Node gsNode1 = multiModalNetwork.getNode(gamaAgent1.toString());
 				for(int j = 0; j<nodes.size(); j++){
-					IAgent gamaAgent2 = (IAgent) nodes.get(j);
-					// We get the graphstream node corresponding to the current gama agent
-					Node gsNode2 = multiModalNetwork.getNode(gamaAgent2.toString());
-					Edge e = multiModalNetwork.addEdge(gsNode1.getId()+"_"+gsNode2.getId()+"_"+mode, gsNode1, gsNode2);
-					e.addAttribute("subnetwork", graph);
-					//e.addAttribute("ui.style", "fill-color: rgb("+color.getRed()+","+color.getGreen()+","+color.getBlue()+");");
+					if(j!=i){
+						IAgent gamaAgent2 = (IAgent) nodes.get(j);
+						// We get the graphstream node corresponding to the current gama agent
+						Node gsNode2 = multiModalNetwork.getNode(gamaAgent2.toString());
+						Edge e = multiModalNetwork.addEdge(gsNode1.getId()+"_"+gsNode2.getId()+"_"+mode, gsNode1, gsNode2);
+						e.addAttribute("subnetwork", graph);
+						//e.addAttribute("ui.style", "fill-color: rgb("+color.getRed()+","+color.getGreen()+","+color.getBlue()+");");
+					}
 				}
 			}
 		}
@@ -475,11 +477,6 @@ public class TransportOrganizerSkill extends Skill {
 
 		for(int i = 0; i < nodes.size(); i++){
 			Node n = nodes.get(i);
-//			n.addAttribute("ui.style", "fill-color:red;");
-//			if(i<edges.size())
-//				edges.get(i).addAttribute("ui.style", "fill-color:red;");
-//			((IAgent)n.getAttribute("gama_agent")).setAttribute("colorValue", 0);
-			
 			// We build the returned path with the multi modal nodes and the graphs between them that must be followed by the goods
 			path.add(n.getAttribute("gama_agent"));
 			if(i < nodes.size()-1){
