@@ -23,7 +23,7 @@ public class TravelTime implements NumberProvider {
 		this.scope = scope;
 	}
 
-	public double getEdgeCost(Node source, Edge e, Node dest, double currentDistance, double volume, Node previousMultiModalNode) {
+	public double getEdgeCost(Node source, Edge e, Node dest) {
 		double res = 0;
 		// first, we add the time to cross the edge
 		if(e.hasAttribute("length") && e.hasAttribute("speed")){
@@ -34,23 +34,26 @@ public class TravelTime implements NumberProvider {
 			res += Math.hypot(source.getNumber("x")-dest.getNumber("x"), source.getNumber("y")-dest.getNumber("y"))/1000 / 50;
 		}
 
-		// second, get the handling time to enter the multi-modal node
-		if(dest.hasAttribute("handling_time_from_"+e.getAttribute("graph_type"))){
+		return res;
+	}
+
+	public double getMultiModalCost(Node source, Node dest, String mode, double currentDistance, double volume) {
+		double res = 0;
+		if(((IAgent)dest.getAttribute("gama_agent")).getAttribute("handling_time_from_"+mode) != null) {
 			// We first get the handling time
-			double handlingTime = (double)((IAgent)dest.getAttribute("gama_agent")).getAttribute("handling_time_from_"+e.getAttribute("graph_type"));
+			double handlingTime = (double)((IAgent)dest.getAttribute("gama_agent")).getAttribute("handling_time_from_"+mode);
 			res += handlingTime;
 
 			// Then, we need to know when the next available vehicle leaves the previous multimodal node
 			// To do so, we need to get the transporter on the next edge
-			String graphType = e.getAttribute("graph_type");
 			final IAgent transporter;
 			// Here, I get the transporter agent.
-			transporter = tos.getTransporter(scope, graphType);
-			handlingTime = (double)((IAgent)previousMultiModalNode.getAttribute("gama_agent")).getAttribute("handling_time_to_"+e.getAttribute("graph_type"));
+			transporter = tos.getTransporter(scope, mode);
+			handlingTime = (double)((IAgent)source.getAttribute("gama_agent")).getAttribute("handling_time_to_"+mode);
 			GamaDate currentDate = scope.getClock().getCurrentDate().plusMillis(currentDistance*3600*1000);
 			GamaDate minimalDepartureDate = currentDate.plusMillis(handlingTime*3600*1000);
 			// But this object is not an instance of TransporterSkill, therefore, I need to use a static method with the agent in parameter
-			GamaDate departure = TransporterSkill.getDepartureDate(scope, transporter, previousMultiModalNode, dest, minimalDepartureDate, volume);
+			GamaDate departure = TransporterSkill.getDepartureDate(scope, transporter, source, dest, minimalDepartureDate, volume);
 			if(departure.getSecond() != 0){
 				departure.plus(60-departure.getSecond(), ChronoUnit.SECONDS);
 			}
@@ -61,11 +64,6 @@ public class TravelTime implements NumberProvider {
 			double hours = currentDate.until(departure, ChronoUnit.HOURS);
 			res += hours;
 		}
-//		if(source.hasAttribute("handling_time_to_"+e.getAttribute("graph_type"))){
-//			// We first get the handling time
-//			double handlingTime = (double)((IAgent)dest.getAttribute("gama_agent")).getAttribute("handling_time_to_"+e.getAttribute("graph_type"));
-//			res += handlingTime;
-//		}
 		return res;
 	}
 }
