@@ -26,7 +26,7 @@ public class Test {
 		for(Edge e : multiModalNetwork.getEachEdge())
 			e.addAttribute("ui.style", "fill-color:black;");
 		multiModalNetwork.getEdge("MaritimeLine2").addAttribute("ui.style", "fill-color:red;");
-		DijkstraComplexLength dijkstra = new DijkstraComplexLength("travel_time", new TravelTime());
+		SubDijkstra dijkstra = new SubDijkstra("travel_time", new TravelTime());
 //		DijkstraComplexLength dijkstra = new DijkstraComplexLength("financial_costs", new FinancialCosts());
 		dijkstra.init(multiModalNetwork);
 
