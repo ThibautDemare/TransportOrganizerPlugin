@@ -28,9 +28,9 @@ public class SubDijkstra extends AbstractSpanningTree {
 
 	// *** Helpers ***
 
-	protected double getLength(Node source, Edge edge, Node dest, double currentDistance, double volume, Node multiModalSource) {
+	protected double getLength(Node source, Edge edge, Node dest) {
 		double length = 0;
-		length += numberProvider == null ? 1 : numberProvider.getEdgeCost(source, edge, dest, currentDistance, volume, multiModalSource);
+		length += numberProvider == null ? 1 : numberProvider.getEdgeCost(source, edge, dest);
 		if (length < 0)
 			throw new IllegalStateException("Edge " + edge.getId()
 					+ " has negative length " + length);
@@ -190,18 +190,8 @@ public class SubDijkstra extends AbstractSpanningTree {
 				Data dataV = v.getAttribute(resultAttribute);
 				if (dataV.fn == null)
 					continue;
-				double tryDist;
-				if(!u.hasAttribute("multiModalNode") && u.getAttribute("multimodalSource") == null)
-					tryDist = dataU.distance;
-				else
-					tryDist = dataU.distance + getLength(u, e, v, dataU.distance, volume, u.hasAttribute("multiModalNode")?u:u.getAttribute("multimodalSource"));
+				double tryDist = dataU.distance + getLength(u, e, v);
 				if (tryDist < dataV.fn.getKey()) {
-					if(u.hasAttribute("multiModalNode")){
-						v.addAttribute("multimodalSource", u);
-					}
-					else {
-						v.addAttribute("multimodalSource", (Node) u.getAttribute("multimodalSource"));
-					};
 					dataV.edgeFromParent = e;
 					heap.decreaseKey(dataV.fn, tryDist);
 				}
@@ -279,7 +269,7 @@ public class SubDijkstra extends AbstractSpanningTree {
 			while (it.hasNext()) {
 				Edge e = it.next();
 				Node u = e.getOpposite(v);
-				if (getPathLength(u) + getLength(u, e, v, getPathLength(u), volume, v.getAttribute("multiModalSource")) == lengthV) {
+				if (getPathLength(u) + getLength(u, e, v) == lengthV) {
 					nodes.add(u);
 					iterators.add(u.getEnteringEdgeIterator());
 					return;
@@ -406,7 +396,7 @@ public class SubDijkstra extends AbstractSpanningTree {
 			Node node = edge.getNode0();
 			if (getEdgeFromParent(node) != edge)
 				node = edge.getNode1();
-			length += getLength(edge.getOpposite(node), edge, node, length, volume, previousMultiModalNode);
+			length += getLength(edge.getOpposite(node), edge, node);
 			if(node.hasAttribute("multiModalNode"))
 				previousMultiModalNode = node;
 		}
