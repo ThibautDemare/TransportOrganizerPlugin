@@ -328,15 +328,31 @@ public class MultiModalDijkstra extends AbstractSpanningTree {
 	private void updateLengthLeavingEdge(Node u, Edge origin, double currentDistance, double volume){
 		// Pour chaque graphes associé à un mode auquel ce noud est connecté
 		for(Graph g : ((ArrayList<Graph>) u.getAttribute("modes"))){
-			SubDijkstra d = new SubDijkstra("sub_"+resultAttribute, numberProvider);
-			d.init(g);
-			d.setSource(g.getNode(u.getId()));
-			d.compute(volume);
+			SubDijkstra d = null;
 			for(Edge e : u.getLeavingEdgeSet()){
 				if(e != origin && e.getAttribute("subnetwork") == g){
-					e.setAttribute("length_from_"+u.getId(), d.getPathLength(g.getNode(e.getOpposite(u).getId())));
+					double pathLength;
+					if(!e.hasAttribute("path_length_from_"+u.getId())){
+						if(d == null){
+							d = new SubDijkstra("sub_"+resultAttribute+"_"+u.getId(), numberProvider);
+							d.init(g);
+							d.setSource(g.getNode(u.getId()));
+							d.compute(volume);
+						}
+						e.addAttribute("path_length_from_"+u.getId(), d.getPathLength(g.getNode(e.getOpposite(u).getId())));
+					}
+					pathLength = e.getNumber("path_length_from_"+u.getId());
+					if(pathLength == Double.POSITIVE_INFINITY)
+						e.setAttribute("length_from_"+u.getId(), Double.POSITIVE_INFINITY);
+					else
+						e.setAttribute("length_from_"+u.getId(),
+							numberProvider.getMultiModalCost(u, e.getOpposite(u), g.getId(), currentDistance, volume) +
+							pathLength
+							);
 				}
 			}
+			if(d != null)
+				d.clear();
 		}
 	}
 
