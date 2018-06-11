@@ -127,6 +127,7 @@ public class MultiModalDijkstra extends AbstractSpanningTree {
 		FibonacciHeap<Double, Node>.Node fn;
 		Edge edgeFromParent;
 		double distance;
+		double timeDistance;
 	}
 
 	/**
@@ -319,6 +320,9 @@ public class MultiModalDijkstra extends AbstractSpanningTree {
 				double tryDist = dataU.distance + getLength(e, v);
 				if (tryDist < dataV.fn.getKey()) {
 					dataV.edgeFromParent = e;
+					dataV.timeDistance = dataU.timeDistance
+							+ e.getNumber("path_time_length_from_"+u.getId())
+							+ numberProvider.getTimeMultiModalCost(u, v, ((Graph)e.getAttribute("subnetwork")).getId(), dataU.timeDistance, volume);
 					heap.decreaseKey(dataV.fn, tryDist);
 				}
 			}
@@ -340,6 +344,7 @@ public class MultiModalDijkstra extends AbstractSpanningTree {
 							d.compute(volume);
 						}
 						e.addAttribute("path_length_from_"+u.getId(), d.getPathLength(g.getNode(e.getOpposite(u).getId())));
+						e.addAttribute("path_time_length_from_"+u.getId(), d.getPathTimeLength(g.getNode(e.getOpposite(u).getId())));
 					}
 					pathLength = e.getNumber("path_length_from_"+u.getId());
 					if(pathLength == Double.POSITIVE_INFINITY)
@@ -534,6 +539,21 @@ public class MultiModalDijkstra extends AbstractSpanningTree {
 	 */
 	public double getPathLength(Node target) {
 		return target.<Data> getAttribute(resultAttribute).distance;
+	}
+
+	/**
+	 * Returns the length of the shortest path from the source node to a given
+	 * target node.
+	 * 
+	 * @param target
+	 *            A node
+	 * @return the length of the shortest path or
+	 *         {@link java.lang.Double#POSITIVE_INFINITY} if there is no path
+	 *         from the source to the target
+	 * @complexity O(1)
+	 */
+	public double getPathTimeLength(Node target) {
+		return target.<Data> getAttribute(resultAttribute).timeDistance;
 	}
 
 	/**
