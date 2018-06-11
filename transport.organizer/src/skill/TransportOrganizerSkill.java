@@ -55,6 +55,7 @@ public class TransportOrganizerSkill extends Skill {
 	private static Graph multiModalNetwork = null;
 	private static FileSinkDGSFiltered fileSink = null;
 	private static HashMap<String, MultiModalDijkstra> dijkstras;
+	private static HashMap<String, Graph> modes;
 
 	/*
 	 * Static methods
@@ -311,6 +312,9 @@ public class TransportOrganizerSkill extends Skill {
 			convertGamaGraphToGraphstreamGraph(scope, getGamaGraph(scope), subnetwork, getMode(scope));
 			connectMultiModalNodesToSubnetwork(scope, nodes, getGamaGraph(scope), subnetwork, mode);
 			connectMultiModalNodesToMainNetwork(nodes, subnetwork, mode);
+			if(modes == null)
+				modes = new HashMap<String, Graph>();
+			modes.put(getMode(scope), subnetwork);
 			flush();
 			scope.getSimulation().setAttribute("multiModalNetwork", multiModalNetwork);
 		}
@@ -350,24 +354,51 @@ public class TransportOrganizerSkill extends Skill {
 		final float saturation = 0.9f;//1.0 for brilliant, 0.0 for dull
 		final float luminance = 1.0f; //1.0 for brighter, 0.0 for black
 		Color color = Color.getHSBColor(hue, saturation, luminance);
+		boolean needToStoreAgent = false;
 		// We connect each multi modal node to the other ones
 		for(int i = 0; i<nodes.size(); i++){
 			IAgent gamaAgent1 = (IAgent) nodes.get(i);
 			// Warehouse are not connected together
-			if(!gamaAgent1.getName().contains("Warehouse")){
+			if(!gamaAgent1.getName().contains("Warehouse") && !gamaAgent1.getName().contains("Building") ){
 				// We get the graphstream node corresponding to the current gama agent
 				Node gsNode1 = multiModalNetwork.getNode(gamaAgent1.toString());
 				for(int j = 0; j<nodes.size(); j++){
 					if(j!=i){
 						IAgent gamaAgent2 = (IAgent) nodes.get(j);
-						// We get the graphstream node corresponding to the current gama agent
-						Node gsNode2 = multiModalNetwork.getNode(gamaAgent2.toString());
-						Edge e = multiModalNetwork.addEdge(gsNode1.getId()+"_"+gsNode2.getId()+"_"+mode, gsNode1, gsNode2);
-						e.addAttribute("subnetwork", graph);
-						//e.addAttribute("ui.style", "fill-color: rgb("+color.getRed()+","+color.getGreen()+","+color.getBlue()+");");
+						if(!gamaAgent2.getName().contains("Warehouse") && !gamaAgent2.getName().contains("Building") ){
+							// We get the graphstream node corresponding to the current gama agent
+							Node gsNode2 = multiModalNetwork.getNode(gamaAgent2.toString());
+							Edge e = multiModalNetwork.addEdge(gsNode1.getId()+"_"+gsNode2.getId()+"_"+mode, gsNode1, gsNode2);
+							e.addAttribute("subnetwork", graph);
+							//e.addAttribute("ui.style", "fill-color: rgb("+color.getRed()+","+color.getGreen()+","+color.getBlue()+");");
+						}
+						else {
+							needToStoreAgent = true;
+						}
 					}
 				}
 			}
+			else {
+				needToStoreAgent = true;
+			}
+		}
+
+		if(needToStoreAgent){
+			ArrayList<String> toBeConnected = new ArrayList<String>();
+			for(int i = 0; i<nodes.size(); i++){
+				IAgent gamaAgent1 = (IAgent) nodes.get(i);
+				Node gsNode1 = multiModalNetwork.getNode(gamaAgent1.toString());
+				if(!gamaAgent1.getName().contains("Warehouse") && !gamaAgent1.getName().contains("Building") ){
+					toBeConnected.add(gsNode1.getId());
+				}
+				else {
+					if(!gsNode1.hasAttribute("modes_id")){
+						gsNode1.addAttribute("modes_id", new ArrayList<String>());
+					}
+					((ArrayList<String>) gsNode1.getAttribute("modes_id")).add(graph.getId());
+				}
+			}
+			multiModalNetwork.addAttribute("toBeConnected_"+graph.getId(), toBeConnected);
 		}
 		flush();
 	}
@@ -403,43 +434,37 @@ public class TransportOrganizerSkill extends Skill {
 		flush();
 	}
 
-	private void connectMultimodalNodesDirectly(IScope scope, IList nodes, Graph network) {
-		// We give different color for the different modes of transport
-		Random random = new Random();
-		final float hue = random.nextFloat();
-		final float saturation = 0.9f;//1.0 for brilliant, 0.0 for dull
-		final float luminance = 1.0f; //1.0 for brighter, 0.0 for black
-		Color color = Color.getHSBColor(hue, saturation, luminance);
-		// We connect each multi modal node to the other ones
-		for(int i = 0; i<nodes.size(); i++){
-			IAgent gamaAgent1 = (IAgent) nodes.get(i);
-			// Warehouse are not connected together
-			if(!gamaAgent1.getName().contains("Warehouse")){
-				// We get the graphstream node corresponding to the current gama agent
-				Node gsNode1 = multiModalNetwork.getNode(gamaAgent1.toString());
-				for(int j = 0; j<nodes.size(); j++){
-					IAgent gamaAgent2 = (IAgent) nodes.get(j);
-					// We get the graphstream node corresponding to the current gama agent
-					Node gsNode2 = multiModalNetwork.getNode(gamaAgent2.toString());
-					Edge e = multiModalNetwork.addEdge(gsNode1.getId()+"_"+gsNode2.getId(), gsNode1, gsNode2);
-					e.addAttribute("subnetwork", network);
-					//e.addAttribute("ui.style", "fill-color: rgb("+color.getRed()+","+color.getGreen()+","+color.getBlue()+");");
-				}
+	private void connectToMainNetwork(Node n){
+		for(String mode : (ArrayList<String>) n.getAttribute("modes_id")){
+			ArrayList<String> toBeConnected = (ArrayList<String>) multiModalNetwork.getAttribute("toBeConnected_"+mode);
+			for(String s : toBeConnected){
+				Node n2 = multiModalNetwork.getNode(s);
+				Edge e = multiModalNetwork.addEdge(n.getId()+"_"+n2.getId(), n, n2);
+				e.addAttribute("subnetwork", modes.get(mode));
 			}
 		}
-		flush();
+	}
+
+	private void disconnectToMainNetwork(Node n){
+		for(String mode : (ArrayList<String>) n.getAttribute("modes_id")){
+			ArrayList<String> toBeConnected = (ArrayList<String>) multiModalNetwork.getAttribute("toBeConnected_"+mode);
+			for(String s : toBeConnected){
+				Node n2 = multiModalNetwork.getNode(s);
+				multiModalNetwork.removeEdge(n, n2);
+			}
+		}
 	}
 
 	@action(
 		name = "compute_shortest_path",
 		args = {
-				@arg(name = IKeywordTOAdditional.ORIGIN, type = IType.AGENT , optional = false, doc = @doc("the location or entity towards which to move.")),
+				@arg(name = IKeywordTOAdditional.ORIGIN, type = IType.AGENT , optional = false, doc = @doc("the location or entity from which to move.")),
 				@arg(name = IKeywordTOAdditional.DESTINATION, type = IType.AGENT , optional = false, doc = @doc("the location or entity towards which to move.")),
 				@arg(name = IKeywordTOAdditional.STRATEGY, type = IType.STRING , optional = false, doc = @doc("The strategy used by the agent to compute the shortest path. Among: 'travel_time' and 'financial_costs'.")),
-				@arg(name = IKeywordTOAdditional.COMMODITY, type = IType.AGENT , optional = false, doc = @doc("the location or entity towards which to move.")),
+				@arg(name = IKeywordTOAdditional.COMMODITY, type = IType.AGENT , optional = false, doc = @doc("the commodities to transport.")),
 		},
 		doc =	@doc(value = "Compute a shortest path between two nodes.", returns = "the path with the list of multi-modal nodes.", 
-					examples = { @example("do compute_shortest_path origin:my_origin_agent destination:my_destination_agent strategy:'travel_time' volume:150 returns:my_returned_path;") })
+					examples = { @example("path <- compute_shortest_path(my_origin_agent, my_destination_agent, 'travel_time', my_commodity);") })
 	)
 	public IList computeShortestPath(final IScope scope) throws GamaRuntimeException {
 		// First, we get the dijsktra we need (there is one dijsktra per strategy)
@@ -452,7 +477,7 @@ public class TransportOrganizerSkill extends Skill {
 			if(strategy.equals("travel_time")){
 				dijkstra = new MultiModalDijkstra("dijkstra_"+strategy, new TravelTime(this, scope));
 			}else{
-				dijkstra = new MultiModalDijkstra("dijkstra_"+strategy, new FinancialCosts());
+				dijkstra = new MultiModalDijkstra("dijkstra_"+strategy, new FinancialCosts(this, scope));
 			}
 			dijkstra.init(multiModalNetwork);
 			dijkstras.put("dijkstra_"+strategy, dijkstra);
@@ -460,8 +485,18 @@ public class TransportOrganizerSkill extends Skill {
 		//Get the graphstream source and target node
 		IAgent gamaSource = (IAgent) scope.getArg(IKeywordTOAdditional.ORIGIN, IType.AGENT);
 		Node sourceNode = (Node) gamaSource.getAttribute("graphstream_node_main");
+
+		if(gamaSource.getName().contains("Warehouse") || gamaSource.getName().contains("Building") ){
+			connectToMainNetwork(sourceNode);
+		}
+
 		IAgent gamaTarget = (IAgent) scope.getArg(IKeywordTOAdditional.DESTINATION, IType.AGENT);
 		Node targetNode = (Node) gamaTarget.getAttribute("graphstream_node_main");
+
+		if(gamaTarget.getName().contains("Warehouse") || gamaTarget.getName().contains("Building") ){
+			connectToMainNetwork(targetNode);
+		}
+
 		// Compute and get the path
 		dijkstra.setSource(sourceNode);
 		dijkstra.compute((double)((IAgent) scope.getArg(IKeywordTOAdditional.COMMODITY, IType.AGENT)).getAttribute("volume"));
@@ -471,9 +506,6 @@ public class TransportOrganizerSkill extends Skill {
 		IList path = GamaListFactory.create();
 		List<Node> nodes = p.getNodePath();
 		List<Edge> edges = p.getEdgePath();
-
-		System.out.println("nodes.size() : "+nodes.size());
-		System.out.println("dijkstra.getPathLength(targetNode) : "+dijkstra.getPathLength(targetNode));
 
 		for(int i = 0; i < nodes.size(); i++){
 			Node n = nodes.get(i);
@@ -485,12 +517,12 @@ public class TransportOrganizerSkill extends Skill {
 				String graphType = ((Graph)edges.get(i).getAttribute("subnetwork")).getId();
 				GamaDate departureDate = scope.getClock().getCurrentDate() // and when does it leave.
 						.plusMillis((double)((IAgent)n.getAttribute("gama_agent")).getAttribute("handling_time_to_"+graphType)*3600*1000)
-						.plusMillis(dijkstra.getPathLength(n)*3600*1000);
+						.plusMillis(dijkstra.getPathTimeLength(n)*3600*1000);
 				if(departureDate.getSecond() != 0){
-					departureDate.plus(60-departureDate.getSecond(), ChronoUnit.SECONDS);
+					departureDate = departureDate.plus(60-departureDate.getSecond(), ChronoUnit.SECONDS);
 				}
 				if(departureDate.getMinute() != 0 ){
-					departureDate.plus(60-departureDate.getMinute(), ChronoUnit.MINUTES);
+					departureDate = departureDate.plus(60-departureDate.getMinute(), ChronoUnit.MINUTES);
 				}
 				TransporterSkill.registerDepartureDate(
 					scope,
@@ -502,6 +534,15 @@ public class TransportOrganizerSkill extends Skill {
 				);
 			}
 		}
+
+		if(gamaSource.getName().contains("Warehouse") || gamaSource.getName().contains("Building") ){
+			disconnectToMainNetwork(sourceNode);
+		}
+
+		if(gamaTarget.getName().contains("Warehouse") || gamaTarget.getName().contains("Building") ){
+			disconnectToMainNetwork(targetNode);
+		}
+
 		return path;
 		// retourne une liste contenant la suite des noeuds multi-modaux par lesquels il faut passer et entre chaque noeud, le graph qu'il faut emprunter
 		
@@ -510,5 +551,64 @@ public class TransportOrganizerSkill extends Skill {
 		//			coût financier -> le cout de traversé d'une arête correspond à la longueur * volume de marchandise * cout km.volume du véhicule mais il faut aussi rajouter au temps de trajet, le temps de manutention au sein des nœuds
 		//			moins cher à échéance
 		//			coût carbone ?? => TODO one day
+	}
+
+	@action(
+		name = "get_path_time_length",
+		args = {
+				@arg(name = IKeywordTOAdditional.ORIGIN, type = IType.AGENT , optional = false, doc = @doc("the location or entity from which to move.")),
+				@arg(name = IKeywordTOAdditional.DESTINATION, type = IType.AGENT , optional = false, doc = @doc("the location or entity towards which to move.")),
+				@arg(name = IKeywordTOAdditional.STRATEGY, type = IType.STRING , optional = false, doc = @doc("The strategy used by the agent to compute the shortest path. Among: 'travel_time' and 'financial_costs'.")),
+				@arg(name = IKeywordTOAdditional.COMMODITY, type = IType.AGENT , optional = false, doc = @doc("the commodities to transport.")),
+		},
+		doc =	@doc(value = "Compute a shortest path between two nodes and return the path length.", returns = "the path length.",
+					examples = { @example("do get_shortest_path_length origin:my_origin_agent destination:my_destination_agent strategy:'travel_time' commodity:my_commodity;") })
+	)
+	public double getPathTimeLength(final IScope scope) throws GamaRuntimeException {
+		// First, we get the dijsktra we need (there is one dijsktra per strategy)
+		MultiModalDijkstra dijkstra;
+		String strategy = getStrategy(scope);
+		if(dijkstras.containsKey("dijkstra_"+strategy)){
+			dijkstra = dijkstras.get("dijkstra_"+strategy);
+		}
+		else{
+			if(strategy.equals("travel_time")){
+				dijkstra = new MultiModalDijkstra("dijkstra_"+strategy, new TravelTime(this, scope));
+			}else{
+				dijkstra = new MultiModalDijkstra("dijkstra_"+strategy, new FinancialCosts(this, scope));
+			}
+			dijkstra.init(multiModalNetwork);
+			dijkstras.put("dijkstra_"+strategy, dijkstra);
+		}
+		//Get the graphstream source and target node
+		IAgent gamaSource = (IAgent) scope.getArg(IKeywordTOAdditional.ORIGIN, IType.AGENT);
+		Node sourceNode = (Node) gamaSource.getAttribute("graphstream_node_main");
+
+		if(gamaSource.getName().contains("Warehouse") || gamaSource.getName().contains("Building") ){
+			connectToMainNetwork(sourceNode);
+		}
+
+		IAgent gamaTarget = (IAgent) scope.getArg(IKeywordTOAdditional.DESTINATION, IType.AGENT);
+		Node targetNode = (Node) gamaTarget.getAttribute("graphstream_node_main");
+
+		if(gamaTarget.getName().contains("Warehouse") || gamaTarget.getName().contains("Building") ){
+			connectToMainNetwork(targetNode);
+		}
+
+		// Compute and get the path
+		dijkstra.setSource(sourceNode);
+		dijkstra.compute((double)((IAgent) scope.getArg(IKeywordTOAdditional.COMMODITY, IType.AGENT)).getAttribute("volume"));
+		flush();
+		Path p = dijkstra.getPath(targetNode);
+		double pathTimeLength = dijkstra.getPathTimeLength(targetNode);
+		if(gamaSource.getName().contains("Warehouse") || gamaSource.getName().contains("Building") ){
+			disconnectToMainNetwork(sourceNode);
+		}
+
+		if(gamaTarget.getName().contains("Warehouse") || gamaTarget.getName().contains("Building") ){
+			disconnectToMainNetwork(targetNode);
+		}
+
+		return pathTimeLength;
 	}
 }
