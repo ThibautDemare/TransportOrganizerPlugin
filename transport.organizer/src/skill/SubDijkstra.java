@@ -20,6 +20,7 @@ public class SubDijkstra extends AbstractSpanningTree {
 		FibonacciHeap<Double, Node>.Node fn;
 		Edge edgeFromParent;
 		double distance;
+		double timeDistance;
 	}
 
 	protected String resultAttribute;
@@ -28,9 +29,18 @@ public class SubDijkstra extends AbstractSpanningTree {
 
 	// *** Helpers ***
 
-	protected double getLength(Node source, Edge edge, Node dest) {
+	protected double getLength(Node source, Edge edge, Node dest, double volume) {
 		double length = 0;
-		length += numberProvider == null ? 1 : numberProvider.getEdgeCost(source, edge, dest);
+		length += numberProvider == null ? 1 : numberProvider.getEdgeCost(source, edge, dest, volume);
+		if (length < 0)
+			throw new IllegalStateException("Edge " + edge.getId()
+					+ " has negative length " + length);
+		return length;
+	}
+
+	protected double getTimeLength(Node source, Edge edge, Node dest){
+		double length = 0;
+		length += numberProvider == null ? 1 : NumberProvider.getTimeLength(source, edge, dest);
 		if (length < 0)
 			throw new IllegalStateException("Edge " + edge.getId()
 					+ " has negative length " + length);
@@ -190,10 +200,11 @@ public class SubDijkstra extends AbstractSpanningTree {
 				Data dataV = v.getAttribute(resultAttribute);
 				if (dataV.fn == null)
 					continue;
-				double tryDist = dataU.distance + getLength(u, e, v);
+				double tryDist = dataU.distance + getLength(u, e, v, volume);
 				if (tryDist < dataV.fn.getKey()) {
 					dataV.edgeFromParent = e;
 					heap.decreaseKey(dataV.fn, tryDist);
+					dataV.timeDistance = dataU.timeDistance + getTimeLength(u, e, v);
 				}
 			}
 		}
@@ -269,7 +280,7 @@ public class SubDijkstra extends AbstractSpanningTree {
 			while (it.hasNext()) {
 				Edge e = it.next();
 				Node u = e.getOpposite(v);
-				if (getPathLength(u) + getLength(u, e, v) == lengthV) {
+				if (getPathLength(u) + getLength(u, e, v, volume) == lengthV) {
 					nodes.add(u);
 					iterators.add(u.getEnteringEdgeIterator());
 					return;
@@ -382,6 +393,21 @@ public class SubDijkstra extends AbstractSpanningTree {
 	}
 
 	/**
+	 * Returns the length of the shortest path from the source node to a given
+	 * target node.
+	 * 
+	 * @param target
+	 *            A node
+	 * @return the length of the shortest path or
+	 *         {@link java.lang.Double#POSITIVE_INFINITY} if there is no path
+	 *         from the source to the target
+	 * @complexity O(1)
+	 */
+	public double getPathTimeLength(Node target) {
+		return target.<Data> getAttribute(resultAttribute).timeDistance;
+	}
+
+	/**
 	 * Dijkstra's algorithm produces a shortest path tree rooted in the source
 	 * node. This method returns the total length of the tree.
 	 * 
@@ -396,7 +422,7 @@ public class SubDijkstra extends AbstractSpanningTree {
 			Node node = edge.getNode0();
 			if (getEdgeFromParent(node) != edge)
 				node = edge.getNode1();
-			length += getLength(edge.getOpposite(node), edge, node);
+			length += getLength(edge.getOpposite(node), edge, node, volume);
 			if(node.hasAttribute("multiModalNode"))
 				previousMultiModalNode = node;
 		}
