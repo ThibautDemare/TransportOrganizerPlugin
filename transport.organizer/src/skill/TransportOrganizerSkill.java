@@ -544,13 +544,6 @@ public class TransportOrganizerSkill extends Skill {
 		}
 
 		return path;
-		// retourne une liste contenant la suite des noeuds multi-modaux par lesquels il faut passer et entre chaque noeud, le graph qu'il faut emprunter
-		
-		// strategy:
-		//			temps de trajet -> le cout de traversé d'une arête correspond à la longueur * la vitesse du véhicule mais il faut aussi rajouter au temps de trajet, le temps de manutention au sein des nœuds+ éventuellement le temps d'attente du départ du véhicule
-		//			coût financier -> le cout de traversé d'une arête correspond à la longueur * volume de marchandise * cout km.volume du véhicule mais il faut aussi rajouter au temps de trajet, le temps de manutention au sein des nœuds
-		//			moins cher à échéance
-		//			coût carbone ?? => TODO one day
 	}
 
 	@action(
