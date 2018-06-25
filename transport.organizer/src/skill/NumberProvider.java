@@ -17,11 +17,39 @@ public abstract class NumberProvider {
 		this.tos = tos;
 		this.scope = scope;
 	}
-	
+
+	/**
+	 * It returns additional costs of multi-modal nodes
+	 * @param source
+	 * @param dest
+	 * @param mode
+	 * @param currentDistance
+	 * @param volume
+	 * @return
+	 */
 	public abstract double getMultiModalCost(Node source, Node dest, String mode, double currentDistance, double volume);
+
+	/**
+	 * It returns the costs of an edge according to the source, destination and volume
+	 * @param source
+	 * @param e
+	 * @param dest
+	 * @param volume
+	 * @return
+	 */
 	public abstract double getEdgeCost(Node source, Edge e, Node dest, double volume);
-	
+
+	/**
+	 * It returns the time necessary to cross an edge
+	 * @param source
+	 * @param e
+	 * @param dest
+	 * @return
+	 */
 	public static double getTimeLength(Node source, Edge e, Node dest) {
+		if(e.hasAttribute("blocked_edge") && (boolean)e.getAttribute("blocked_edge"))
+			return Double.POSITIVE_INFINITY;
+
 		double res = 0;
 		// first, we add the time to cross the edge
 		if(e.hasAttribute("length") && e.hasAttribute("speed")){
@@ -33,7 +61,16 @@ public abstract class NumberProvider {
 		}
 		return res;
 	}
-	
+
+	/**
+	 * It returns the time necessary to cross a multi-modal node
+	 * @param source
+	 * @param dest
+	 * @param mode
+	 * @param currentDistance
+	 * @param volume
+	 * @return
+	 */
 	public double getTimeMultiModalCost(Node source, Node dest, String mode, double currentDistance, double volume) {
 		double res = 0;
 		if(((IAgent)dest.getAttribute("gama_agent")).getAttribute("handling_time_from_"+mode) != null) {

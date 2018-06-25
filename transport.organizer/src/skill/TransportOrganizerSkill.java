@@ -611,4 +611,42 @@ public class TransportOrganizerSkill extends Skill {
 
 		return pathTimeLength;
 	}
+
+	@action(
+			name = "block_edge",
+			args = {
+					@arg(name = IKeywordTOAdditional.EDGE, type = IType.AGENT, optional = false, doc = @doc("the edge to block."))
+			},
+			doc =
+			@doc(value = "Block an edge ", examples = { @example("do block_edge edge:a_road;") })
+			)
+	public void blockEdgeAction(final IScope scope) throws GamaRuntimeException {
+		final IAgent gama_edge = (IAgent) scope.getArg(IKeywordTOAdditional.EDGE, IType.AGENT);
+		if(gama_edge.hasAttribute("graphstream_edge")){
+			Edge e = ((Edge)gama_edge.getAttribute("graphstream_edge"));
+			e.addAttribute("blocked_edge", true);
+			for(MultiModalDijkstra d : dijkstras.values()) {
+				d.clear();
+			}
+		}
+	}
+
+	@action(
+			name = "unblock_edge",
+			args = {
+					@arg(name = IKeywordTOAdditional.EDGE, type = IType.AGENT, optional = false, doc = @doc("the edge to unblock."))
+			},
+			doc =
+			@doc(value = "Unblock an edge", examples = { @example("do unblock_edge edge:a_road;") })
+			)
+	public void unblockEdgeAction(final IScope scope) throws GamaRuntimeException {
+		final IAgent gama_edge = (IAgent) scope.getArg(IKeywordTOAdditional.EDGE, IType.AGENT);
+		if(gama_edge.hasAttribute("graphstream_edge")){
+			Edge e = ((Edge)gama_edge.getAttribute("graphstream_edge"));
+			e.addAttribute("blocked_edge", false);
+			for(MultiModalDijkstra d : dijkstras.values()) {
+				d.clear();
+			}
+		}
+	}
 }

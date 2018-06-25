@@ -13,4 +13,5 @@ public class IKeywordTOAdditional implements IKeyword {
 	public static final String DESTINATION = "destination";
 	public static final String STRATEGY = "strategy";
 	public static final String COMMODITY = "commodity";
+	public static final String EDGE = "edge";
 }
