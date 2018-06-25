@@ -599,7 +599,7 @@ public class TransportOrganizerSkill extends Skill {
 		dijkstra.setSource(sourceNode);
 		dijkstra.compute((double)((IAgent) scope.getArg(IKeywordTOAdditional.COMMODITY, IType.AGENT)).getAttribute("volume"));
 		flush();
-		Path p = dijkstra.getPath(targetNode);
+		dijkstra.getPath(targetNode);
 		double pathTimeLength = dijkstra.getPathTimeLength(targetNode);
 		if(gamaSource.getName().contains("Warehouse") || gamaSource.getName().contains("Building") ){
 			disconnectToMainNetwork(sourceNode);
