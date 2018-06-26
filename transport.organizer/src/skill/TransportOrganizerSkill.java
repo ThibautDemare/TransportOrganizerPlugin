@@ -105,7 +105,7 @@ public class TransportOrganizerSkill extends Skill {
 		GraphTopology gt = (GraphTopology)(Cast.asTopology(scope, network));
 		ITopology topo = scope.getSimulation().getTopology();
 		IAgent closestEdge = topo.getAgentClosestTo(scope, gamaNode, In.edgesOf(gt.getPlaces()));
-		Edge gsClosestEdge = (Edge)closestEdge.getAttribute("graphstream_edge_"+gsNode.getGraph().getId());
+		Edge gsClosestEdge = (Edge)closestEdge.getAttribute("graphstream_edge");
 		Node closestNode1 = gsClosestEdge.getNode0();
 		Node closestNode2 = gsClosestEdge.getNode1();
 		if(Math.hypot(gsNode.getNumber("x")-closestNode1.getNumber("x"), gsNode.getNumber("y")-closestNode1.getNumber("y")) <
@@ -252,7 +252,7 @@ public class TransportOrganizerSkill extends Skill {
 					}
 					//e.addAttribute("gama_time", e.getNumber(length_attribute) * e.getNumber(speed_attribute));
 					// a know e
-					a.setAttribute("graphstream_edge_"+g.getId(), e);
+					a.setAttribute("graphstream_edge", e);
 				}
 			} catch (EdgeRejectedException e) {
 				((IAgent) edgeObj).setAttribute("col", "red");
@@ -502,6 +502,7 @@ public class TransportOrganizerSkill extends Skill {
 		dijkstra.compute((double)((IAgent) scope.getArg(IKeywordTOAdditional.COMMODITY, IType.AGENT)).getAttribute("volume"));
 		flush();
 		Path p = dijkstra.getPath(targetNode);
+		System.out.println("Path length : "+dijkstra.getPathLength(targetNode));
 		// Construct the output list with intermodal nodes and networks between them
 		IList path = GamaListFactory.create();
 		List<Node> nodes = p.getNodePath();
@@ -606,39 +607,43 @@ public class TransportOrganizerSkill extends Skill {
 	}
 
 	@action(
-			name = "block_edge",
-			args = {
-					@arg(name = IKeywordTOAdditional.EDGE, type = IType.AGENT, optional = false, doc = @doc("the edge to block."))
-			},
-			doc =
-			@doc(value = "Block an edge ", examples = { @example("do block_edge edge:a_road;") })
-			)
+		name = "block_edge",
+		args = {
+				@arg(name = IKeywordTOAdditional.EDGE, type = IType.AGENT, optional = false, doc = @doc("the edge to block."))
+		},
+		doc =
+		@doc(value = "Block an edge ", examples = { @example("do block_edge edge:a_road;") })
+	)
 	public void blockEdgeAction(final IScope scope) throws GamaRuntimeException {
-		final IAgent gama_edge = (IAgent) scope.getArg(IKeywordTOAdditional.EDGE, IType.AGENT);
-		if(gama_edge.hasAttribute("graphstream_edge")){
-			Edge e = ((Edge)gama_edge.getAttribute("graphstream_edge"));
-			e.addAttribute("blocked_edge", true);
-			for(MultiModalDijkstra d : dijkstras.values()) {
-				d.clear();
-			}
-		}
+		blockOrUnblockEdge(scope, true);
 	}
 
 	@action(
-			name = "unblock_edge",
-			args = {
-					@arg(name = IKeywordTOAdditional.EDGE, type = IType.AGENT, optional = false, doc = @doc("the edge to unblock."))
-			},
-			doc =
-			@doc(value = "Unblock an edge", examples = { @example("do unblock_edge edge:a_road;") })
-			)
+		name = "unblock_edge",
+		args = {
+				@arg(name = IKeywordTOAdditional.EDGE, type = IType.AGENT, optional = false, doc = @doc("the edge to unblock."))
+		},
+		doc =
+		@doc(value = "Unblock an edge", examples = { @example("do unblock_edge edge:a_road;") })
+	)
 	public void unblockEdgeAction(final IScope scope) throws GamaRuntimeException {
+		blockOrUnblockEdge(scope, false);
+	}
+
+	private void blockOrUnblockEdge(final IScope scope, boolean bool) {
 		final IAgent gama_edge = (IAgent) scope.getArg(IKeywordTOAdditional.EDGE, IType.AGENT);
 		if(gama_edge.hasAttribute("graphstream_edge")){
+			gama_edge.setAttribute("blocked", bool);
 			Edge e = ((Edge)gama_edge.getAttribute("graphstream_edge"));
-			e.addAttribute("blocked_edge", false);
-			for(MultiModalDijkstra d : dijkstras.values()) {
-				d.clear();
+			e.addAttribute("blocked_edge", bool);
+			// And we clean the pre-computed values in order to force the algorithm to recompute the length of paths
+			Graph mode = modes.get(e.getAttribute("graph_type"));
+			for(Node node : mode.getNodeSet()) {
+				Object[] s = node.getAttributeKeySet().toArray();
+				for(int i = 0; i < s.length; i++) {
+					if(((String)s[i]).contains("path_length_from_") || ((String)s[i]).contains("path_time_length_from_"))
+						node.removeAttribute(((String)s[i]));
+				}
 			}
 		}
 	}
