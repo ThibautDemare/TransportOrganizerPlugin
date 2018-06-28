@@ -23,4 +23,5 @@ public class FinancialCosts extends NumberProvider {
 	@Override
 	public double getMultiModalCost(Node source, Node dest, String mode, double currentDistance, double volume) {
 		return 0;
-	}}
+	}
+}
