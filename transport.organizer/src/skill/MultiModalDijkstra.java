@@ -159,7 +159,7 @@ public class MultiModalDijkstra extends AbstractSpanningTree {
 	// *** Helpers ***
 
 	protected double getLength(Edge edge, Node dest) {
-		return edge.getNumber("length_from_"+edge.getOpposite(dest).getId());
+		return edge.getNumber(resultAttribute+"_length_from_"+edge.getOpposite(dest).getId());
 	}
 
 	protected double getSourceLength() {
@@ -255,6 +255,16 @@ public class MultiModalDijkstra extends AbstractSpanningTree {
 				data.edgeFromParent = null;
 			}
 			node.removeAttribute(resultAttribute);
+
+		}
+
+		for(Edge e : graph.getEachEdge()) {
+			Object[] s = e.getAttributeKeySet().toArray();
+			for(int i = 0; i < s.length; i++) {
+				if(((String)s[i]).contains(resultAttribute)) {
+					e.removeAttribute(((String)s[i]));
+				}
+			}
 		}
 	}
 
@@ -321,7 +331,7 @@ public class MultiModalDijkstra extends AbstractSpanningTree {
 				if (tryDist < dataV.fn.getKey()) {
 					dataV.edgeFromParent = e;
 					dataV.timeDistance = dataU.timeDistance
-							+ e.getNumber("path_time_length_from_"+u.getId())
+							+ e.getNumber(resultAttribute+"_path_time_length_from_"+u.getId())
 							+ numberProvider.getTimeMultiModalCost(u, v, ((Graph)e.getAttribute("subnetwork")).getId(), dataU.timeDistance, volume);
 					heap.decreaseKey(dataV.fn, tryDist);
 				}
@@ -336,21 +346,21 @@ public class MultiModalDijkstra extends AbstractSpanningTree {
 			for(Edge e : u.getLeavingEdgeSet()){
 				if(e != origin && e.getAttribute("subnetwork") == g){
 					double pathLength;
-					if(!e.hasAttribute("path_length_from_"+u.getId())){
+					if(!e.hasAttribute(resultAttribute+"_path_length_from_"+u.getId())){
 						if(d == null){
 							d = new SubDijkstra("sub_"+resultAttribute+"_"+u.getId(), numberProvider);
 							d.init(g);
 							d.setSource(g.getNode(u.getId()));
 							d.compute(volume);
 						}
-						e.addAttribute("path_length_from_"+u.getId(), d.getPathLength(g.getNode(e.getOpposite(u).getId())));
-						e.addAttribute("path_time_length_from_"+u.getId(), d.getPathTimeLength(g.getNode(e.getOpposite(u).getId())));
+						e.addAttribute(resultAttribute+"_path_length_from_"+u.getId(), d.getPathLength(g.getNode(e.getOpposite(u).getId())));
+						e.addAttribute(resultAttribute+"_path_time_length_from_"+u.getId(), d.getPathTimeLength(g.getNode(e.getOpposite(u).getId())));
 					}
-					pathLength = e.getNumber("path_length_from_"+u.getId());
+					pathLength = e.getNumber(resultAttribute+"_path_length_from_"+u.getId());
 					if(pathLength == Double.POSITIVE_INFINITY)
-						e.setAttribute("length_from_"+u.getId(), Double.POSITIVE_INFINITY);
+						e.setAttribute(resultAttribute+"_length_from_"+u.getId(), Double.POSITIVE_INFINITY);
 					else
-						e.setAttribute("length_from_"+u.getId(),
+						e.setAttribute(resultAttribute+"_length_from_"+u.getId(),
 							numberProvider.getMultiModalCost(u, e.getOpposite(u), g.getId(), currentDistance, volume) +
 							pathLength
 							);

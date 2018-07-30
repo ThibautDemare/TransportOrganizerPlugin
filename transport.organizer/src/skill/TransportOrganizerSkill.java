@@ -267,7 +267,6 @@ public class TransportOrganizerSkill extends Skill {
 						true);
 			}
 		}
-
 		flush();
 	}
 
@@ -502,7 +501,6 @@ public class TransportOrganizerSkill extends Skill {
 		dijkstra.compute((double)((IAgent) scope.getArg(IKeywordTOAdditional.COMMODITY, IType.AGENT)).getAttribute("volume"));
 		flush();
 		Path p = dijkstra.getPath(targetNode);
-		System.out.println("Path length : "+dijkstra.getPathLength(targetNode));
 		// Construct the output list with intermodal nodes and networks between them
 		IList path = GamaListFactory.create();
 		List<Node> nodes = p.getNodePath();
@@ -636,15 +634,7 @@ public class TransportOrganizerSkill extends Skill {
 			gama_edge.setAttribute("blocked", bool);
 			Edge e = ((Edge)gama_edge.getAttribute("graphstream_edge"));
 			e.addAttribute("blocked_edge", bool);
-			// And we clean the pre-computed values in order to force the algorithm to recompute the length of paths
-			Graph mode = modes.get(e.getAttribute("graph_type"));
-			for(Node node : mode.getNodeSet()) {
-				Object[] s = node.getAttributeKeySet().toArray();
-				for(int i = 0; i < s.length; i++) {
-					if(((String)s[i]).contains("path_length_from_") || ((String)s[i]).contains("path_time_length_from_"))
-						node.removeAttribute(((String)s[i]));
-				}
-			}
+			dijkstras.forEach((k,v) -> v.clear());
 		}
 	}
 }
