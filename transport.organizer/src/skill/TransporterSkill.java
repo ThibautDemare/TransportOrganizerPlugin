@@ -51,20 +51,26 @@ public class TransporterSkill extends Skill{
 			if(vehicles.size() == 0){
 				// the departure date of the next vehicle is :
 				// the greater date between :
-					// - the current date + the handling time
+					// - the current date + the handling time (= minimalDepartureDate)
 					// => it is equal to the "minimalDepartureDate
-					// - the current date + the minimal time between two vehicles
-				GamaDate date = minimalDepartureDate
-						.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
-				if(minimalDepartureDate.isGreaterThan(date, false))
+					// - the previous vehicle departure + the minimal time between two vehicles
+				GamaDate lastVehicleDeparture = ((GamaDate)buildingSource.getAttribute("lastVehicleDeparture"));
+				if(lastVehicleDeparture != null) {
+					GamaDate date = lastVehicleDeparture
+							.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
+					if(minimalDepartureDate.isGreaterThan(date, false))
+						return minimalDepartureDate;
+					else
+						return date;
+				}
+				else {
 					return minimalDepartureDate;
-				else
-					return date;
+				}
 			}
 			// 2) There is at least one vehicle but we can not use it (it is full or we don't have time to handle the goods before it leaves)
 				// the departure date of the next vehicle is :
 					// the departure date of the last vehicle + the minimal time between two vehicles
-			return ((GamaDate)((IAgent) vehicles.get(vehicles.size()-1)).getAttribute("departureDate"))
+			return ((GamaDate)buildingSource.getAttribute("lastVehicleDeparture"))
 					.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
 		}
 		// Else, we return the departure date of the found vehicle
@@ -107,24 +113,34 @@ public class TransporterSkill extends Skill{
 			if(vehicles.size() == 0){
 				// the departure date of the next vehicle is :
 				// the greater date between :
-					// - the current date + the handling time
-					// => it is equal to the "minimalDepartureDate
-					// - the current date + the minimal time between two vehicles
-				GamaDate date = minimalDepartureDate
-						.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
-				if(minimalDepartureDate.isGreaterThan(date, false)) {
-					vehicle.setAttribute("departureDate", minimalDepartureDate);
+					// - the current date + the handling time (= minimalDepartureDate)
+					// - the previous vehicle departure + the minimal time between two vehicles
+				GamaDate lastVehicleDeparture = ((GamaDate)building.getAttribute("lastVehicleDeparture"));
+				if(lastVehicleDeparture != null) {
+					GamaDate date = lastVehicleDeparture
+							.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
+					if(minimalDepartureDate.isGreaterThan(date, false)) {
+						vehicle.setAttribute("departureDate", minimalDepartureDate);
+						building.setAttribute("lastVehicleDeparture", minimalDepartureDate);
+					}
+					else {
+						vehicle.setAttribute("departureDate", date);
+						building.setAttribute("lastVehicleDeparture", date);
+					}
 				}
 				else {
-					vehicle.setAttribute("departureDate", date);
+					vehicle.setAttribute("departureDate", minimalDepartureDate);
+					building.setAttribute("lastVehicleDeparture", minimalDepartureDate);
 				}
 			}
 			else {
 				// There is at least one vehicle but we can not use it (it is full or we don't have time to handle the goods before it leaves)
 					// the departure date of the next vehicle is :
 						// the departure date of the last vehicle + the minimal time between two vehicles
-				vehicle.setAttribute("departureDate",  ((GamaDate)((IAgent) vehicles.get(vehicles.size()-1)).getAttribute("departureDate"))
-						.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000));
+				GamaDate d = ((GamaDate)building.getAttribute("lastVehicleDeparture"))
+						.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
+				vehicle.setAttribute("departureDate",  d);
+				building.setAttribute("lastVehicleDeparture", d);
 			}
 		}
 		else {
