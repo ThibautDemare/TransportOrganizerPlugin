@@ -21,6 +21,7 @@ public class SubDijkstra extends AbstractSpanningTree {
 		Edge edgeFromParent;
 		double distance;
 		double timeDistance;
+		double financialCostDistance;
 	}
 
 	protected String resultAttribute;
@@ -41,6 +42,15 @@ public class SubDijkstra extends AbstractSpanningTree {
 	protected double getTimeLength(Node source, Edge edge, Node dest){
 		double length = 0;
 		length += numberProvider == null ? 1 : NumberProvider.getTimeLength(source, edge, dest);
+		if (length < 0)
+			throw new IllegalStateException("Edge " + edge.getId()
+					+ " has negative length " + length);
+		return length;
+	}
+
+	protected double getFinancialCostLength(Node source, Edge edge, Node dest, double volume){
+		double length = 0;
+		length += numberProvider == null ? 1 : numberProvider.getFinancialCostLength(source, edge, dest, volume);
 		if (length < 0)
 			throw new IllegalStateException("Edge " + edge.getId()
 					+ " has negative length " + length);
@@ -205,6 +215,7 @@ public class SubDijkstra extends AbstractSpanningTree {
 					dataV.edgeFromParent = e;
 					heap.decreaseKey(dataV.fn, tryDist);
 					dataV.timeDistance = dataU.timeDistance + getTimeLength(u, e, v);
+					dataV.financialCostDistance = dataU.financialCostDistance + getFinancialCostLength(u, e, v, volume);
 				}
 			}
 		}
@@ -393,7 +404,7 @@ public class SubDijkstra extends AbstractSpanningTree {
 	}
 
 	/**
-	 * Returns the length of the shortest path from the source node to a given
+	 * Returns the length (in term of time) of the shortest path from the source node to a given
 	 * target node.
 	 * 
 	 * @param target
@@ -405,6 +416,21 @@ public class SubDijkstra extends AbstractSpanningTree {
 	 */
 	public double getPathTimeLength(Node target) {
 		return target.<Data> getAttribute(resultAttribute).timeDistance;
+	}
+
+	/**
+	 * Returns the length (in term of financial costs) of the shortest path from the source node to a given
+	 * target node.
+	 * 
+	 * @param target
+	 *            A node
+	 * @return the length of the shortest path or
+	 *         {@link java.lang.Double#POSITIVE_INFINITY} if there is no path
+	 *         from the source to the target
+	 * @complexity O(1)
+	 */
+	public double getPathFinancialCostLength(Node target) {
+		return target.<Data> getAttribute(resultAttribute).financialCostDistance;
 	}
 
 	/**

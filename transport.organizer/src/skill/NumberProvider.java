@@ -46,6 +46,20 @@ public abstract class NumberProvider {
 	 * @param dest
 	 * @return
 	 */
+	public double getFinancialCostLength(Node source, Edge e, Node dest, double volume) {
+		if(e.hasAttribute("blocked_edge") && (boolean)e.getAttribute("blocked_edge"))
+			return Double.POSITIVE_INFINITY;
+		final IAgent transporter = tos.getTransporter(scope, e.getAttribute("graph_type"));
+		return e.getNumber("length") * volume * TransporterSkill.getVolumeKilometerCosts(scope, transporter);
+	}
+
+	/**
+	 * It returns the time necessary to cross an edge
+	 * @param source
+	 * @param e
+	 * @param dest
+	 * @return
+	 */
 	public static double getTimeLength(Node source, Edge e, Node dest) {
 		if(e.hasAttribute("blocked_edge") && (boolean)e.getAttribute("blocked_edge"))
 			return Double.POSITIVE_INFINITY;

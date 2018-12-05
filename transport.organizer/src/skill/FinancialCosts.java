@@ -16,8 +16,7 @@ public class FinancialCosts extends NumberProvider {
 	public double getEdgeCost(Node source, Edge e, Node dest, double volume) {
 		if(e.hasAttribute("blocked_edge") && (boolean)e.getAttribute("blocked_edge"))
 			return Double.POSITIVE_INFINITY;
-		final IAgent transporter = tos.getTransporter(scope, e.getAttribute("graph_type"));
-		return e.getNumber("length") * volume * TransporterSkill.getVolumeKilometerCosts(scope, transporter);
+		return getFinancialCostLength(source, e, dest, volume);
 	}
 
 	@Override
