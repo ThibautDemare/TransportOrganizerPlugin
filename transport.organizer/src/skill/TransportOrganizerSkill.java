@@ -42,20 +42,35 @@ import msi.gama.util.graph._Vertex;
 import msi.gaml.operators.Cast;
 import msi.gaml.skills.Skill;
 import msi.gaml.types.IType;
-import skill.NumberProvider;
 
 @doc("This skill is intended to manage a multi-modal network. It means create it and compute shortest paths on it.")
 @skill(name = IKeywordTOAdditional.TRANSPORT_ORGANIZER)
 public class TransportOrganizerSkill extends Skill {
 
-	/*
-	 * Attributes
-	 */
+	private class DataSimulation {
+		/*
+		 * Attributes
+		 */
+	
+		private Graph multiModalNetwork = null;
+		private FileSinkDGSFiltered fileSink = null;
+		private HashMap<String, MultiModalDijkstra> dijkstras;
+		private HashMap<String, Graph> modes;
+		private double seed;
+	}
 
-	private static Graph multiModalNetwork = null;
-	private static FileSinkDGSFiltered fileSink = null;
-	private static HashMap<String, MultiModalDijkstra> dijkstras;
-	private static HashMap<String, Graph> modes;
+	// All the data used by this plugin are stored into this variable, itself stored as an attribute of a simulation.
+	// Therefore, this plugin can be used with simulation executed in parallel.
+	private static DataSimulation currentSimulation;
+
+	public void getCurrentSimulation(final IScope scope) {
+		currentSimulation = (DataSimulation) scope.getSimulation().getAttribute("gaml.extensions.transport.organizer.dataSimulation");
+		if(currentSimulation == null) {
+			currentSimulation = new DataSimulation();
+			currentSimulation.seed = scope.getSimulation().getSeed();
+			scope.getSimulation().setAttribute("gaml.extensions.transport.organizer.dataSimulation", currentSimulation);
+		}
+	}
 
 	/*
 	 * Static methods
@@ -87,7 +102,7 @@ public class TransportOrganizerSkill extends Skill {
 
 	private void flush() {
 		try {
-			fileSink.flush();
+			currentSimulation.fileSink.flush();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -117,80 +132,82 @@ public class TransportOrganizerSkill extends Skill {
 
 	private void initFileSink(){
 		// We save the graph in a DGS file (mostly for debug purpose but can be use for something else too)
-		fileSink = new FileSinkDGSFiltered();
-		multiModalNetwork.addSink(fileSink);
+		currentSimulation.fileSink = new FileSinkDGSFiltered();
+		//currentSimulation.multiModalNetwork.addSink(currentSimulation.fileSink);
 		try {
-			String fileName = new File(new File("."), "../workspace-model/DALSim/results/DGS/multiModalNetwork.dgs").getCanonicalPath();
-			fileSink.begin(fileName);
+			String fileName = "./multiModalNetwork.dgs";
+			File yourFile = new File(fileName);
+			yourFile.createNewFile(); // if file already exists will do nothing 
+			currentSimulation.fileSink.begin(fileName);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 
 		// Filter useless attributes in edges
-		fileSink.addEdgeAttributeFiltered("gama_agent");
-		fileSink.addEdgeAttributeFiltered("color");
-		fileSink.addEdgeAttributeFiltered("graphstream_edge");
-		fileSink.addEdgeAttributeFiltered("gama_time");
-		fileSink.addEdgeAttributeFiltered("gamaGraph");
-		fileSink.addEdgeAttributeFiltered("flagAttribute");
-		fileSink.addEdgeAttributeFiltered("Shape_Leng");
-		fileSink.addEdgeAttributeFiltered("cout_�");
-		fileSink.addEdgeAttributeFiltered("sur_gasoil");
-		fileSink.addEdgeAttributeFiltered("CO2");
-		fileSink.addEdgeAttributeFiltered("cout");
-		fileSink.addEdgeAttributeFiltered("dur�e_min");
-		fileSink.addEdgeAttributeFiltered("Long_km");
-		fileSink.addEdgeAttributeFiltered("RTT");
-		fileSink.addEdgeAttributeFiltered("RTN");
-		fileSink.addEdgeAttributeFiltered("RTE");
-		fileSink.addEdgeAttributeFiltered("RSU");
-		fileSink.addEdgeAttributeFiltered("RST");
-		fileSink.addEdgeAttributeFiltered("MED");
-		fileSink.addEdgeAttributeFiltered("LOC");
-		fileSink.addEdgeAttributeFiltered("EXS");
-		fileSink.addEdgeAttributeFiltered("SN");
-		fileSink.addEdgeAttributeFiltered("ICC");
-		fileSink.addEdgeAttributeFiltered("F_CODE");
-		fileSink.addEdgeAttributeFiltered("gfid");
-		fileSink.addEdgeAttributeFiltered("FCsubtype");
-		fileSink.addEdgeAttributeFiltered("OBJECTID_1");
-		fileSink.addEdgeAttributeFiltered("OBJECTID");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("gama_agent");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("color");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("graphstream_edge");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("gama_time");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("gamaGraph");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("flagAttribute");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("Shape_Leng");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("cout_�");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("sur_gasoil");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("CO2");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("cout");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("dur�e_min");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("Long_km");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("RTT");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("RTN");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("RTE");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("RSU");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("RST");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("MED");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("LOC");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("EXS");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("SN");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("ICC");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("F_CODE");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("gfid");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("FCsubtype");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("OBJECTID_1");
+		currentSimulation.fileSink.addEdgeAttributeFiltered("OBJECTID");
 
 		// Filter useless attributes in nodes
-		fileSink.addNodeAttributeFiltered("dijkstra_travel_time");
-		fileSink.addNodeAttributeFiltered("flagAttribute");
-		fileSink.addNodeAttributeFiltered("graphstream_node");
-		fileSink.addNodeAttributeFiltered("gamaGraph");
-		fileSink.addNodeAttributeFiltered("totalSurface");
-		fileSink.addNodeAttributeFiltered("probaAnt");
-		fileSink.addNodeAttributeFiltered("surface");
-		fileSink.addNodeAttributeFiltered("gama_agent");
-		fileSink.addNodeAttributeFiltered("id");
-		fileSink.addNodeAttributeFiltered("speed");
-		fileSink.addNodeAttributeFiltered("Id");
-		fileSink.addNodeAttributeFiltered("Nom");
-		fileSink.addNodeAttributeFiltered("Activit�");
-		fileSink.addNodeAttributeFiltered("co_ferro");
-		fileSink.addNodeAttributeFiltered("co_auto");
-		fileSink.addNodeAttributeFiltered("surf_stock");
-		fileSink.addNodeAttributeFiltered("cap_EVP_an");
-		fileSink.addNodeAttributeFiltered("INDEX_NO");
-		fileSink.addNodeAttributeFiltered("PORT_NAME");
-		fileSink.addNodeAttributeFiltered("TERMINAL_N");
-		fileSink.addNodeAttributeFiltered("COUNTRY");
-		fileSink.addNodeAttributeFiltered("LATITUDE");
-		fileSink.addNodeAttributeFiltered("LONGITUDE");
-		fileSink.addNodeAttributeFiltered("Date_de_MA");
-		fileSink.addNodeAttributeFiltered("TOC");
+		currentSimulation.fileSink.addNodeAttributeFiltered("dijkstra_travel_time");
+		currentSimulation.fileSink.addNodeAttributeFiltered("flagAttribute");
+		currentSimulation.fileSink.addNodeAttributeFiltered("graphstream_node");
+		currentSimulation.fileSink.addNodeAttributeFiltered("gamaGraph");
+		currentSimulation.fileSink.addNodeAttributeFiltered("totalSurface");
+		currentSimulation.fileSink.addNodeAttributeFiltered("probaAnt");
+		currentSimulation.fileSink.addNodeAttributeFiltered("surface");
+		currentSimulation.fileSink.addNodeAttributeFiltered("gama_agent");
+		currentSimulation.fileSink.addNodeAttributeFiltered("id");
+		currentSimulation.fileSink.addNodeAttributeFiltered("speed");
+		currentSimulation.fileSink.addNodeAttributeFiltered("Id");
+		currentSimulation.fileSink.addNodeAttributeFiltered("Nom");
+		currentSimulation.fileSink.addNodeAttributeFiltered("Activit�");
+		currentSimulation.fileSink.addNodeAttributeFiltered("co_ferro");
+		currentSimulation.fileSink.addNodeAttributeFiltered("co_auto");
+		currentSimulation.fileSink.addNodeAttributeFiltered("surf_stock");
+		currentSimulation.fileSink.addNodeAttributeFiltered("cap_EVP_an");
+		currentSimulation.fileSink.addNodeAttributeFiltered("INDEX_NO");
+		currentSimulation.fileSink.addNodeAttributeFiltered("PORT_NAME");
+		currentSimulation.fileSink.addNodeAttributeFiltered("TERMINAL_N");
+		currentSimulation.fileSink.addNodeAttributeFiltered("COUNTRY");
+		currentSimulation.fileSink.addNodeAttributeFiltered("LATITUDE");
+		currentSimulation.fileSink.addNodeAttributeFiltered("LONGITUDE");
+		currentSimulation.fileSink.addNodeAttributeFiltered("Date_de_MA");
+		currentSimulation.fileSink.addNodeAttributeFiltered("TOC");
 
 		// No need to save graph attributes
-		fileSink.setNoFilterGraphAttributeAdded(false);
-		fileSink.setNoFilterGraphAttributeChanged(false);
-		fileSink.setNoFilterGraphAttributeRemoved(false);
+		currentSimulation.fileSink.setNoFilterGraphAttributeAdded(false);
+		currentSimulation.fileSink.setNoFilterGraphAttributeChanged(false);
+		currentSimulation.fileSink.setNoFilterGraphAttributeRemoved(false);
 
 		// and no need either of result which contains Dijsktra reference
-		fileSink.addNodeAttributeFiltered("dijkstra_travel_time");
-		fileSink.addNodeAttributeFiltered("dijkstra_financial_costs");
+		currentSimulation.fileSink.addNodeAttributeFiltered("dijkstra_travel_time");
+		currentSimulation.fileSink.addNodeAttributeFiltered("dijkstra_financial_costs");
 	}
 
 	/**
@@ -275,7 +292,7 @@ public class TransportOrganizerSkill extends Skill {
 	 */
 
 	@action(
-		name = "add_network",
+		name = "add_mode",
 		args = {
 				@arg(name = IKeywordTOAdditional.NETWORK, type = IType.GRAPH , optional = false, doc = @doc("the GAMA graph which needs to be added.")),
 				@arg(name = IKeywordTOAdditional.MODE, type = IType.STRING , optional = false, doc = @doc("Which mode of transport is this network (road, maritime,...).")),
@@ -285,18 +302,19 @@ public class TransportOrganizerSkill extends Skill {
 		@doc(value = "Add a network to the multi-modal one. You need to add first the road network.", examples = { @example("do add_network network:my_network mode:'road' nodes:my_nodes;") })
 	)
 	public void addMode(final IScope scope) throws GamaRuntimeException {
+		getCurrentSimulation(scope);
 		try {
 			IList nodes = (IList) scope.getArg(IKeywordTOAdditional.NODES, IType.LIST);
 			String mode = (String) scope.getArg(IKeywordTOAdditional.MODE, IType.STRING);
 			
-			if(multiModalNetwork == null){
+			if(currentSimulation.multiModalNetwork == null){
 				/*
 				Si le réseau de nœud multi n'a pas encore été créé
 					on crée l'objet multiModalNetwork
 				*/
-				multiModalNetwork = new MultiGraph("main", true, false);
+				currentSimulation.multiModalNetwork = new MultiGraph("main", true, false);
 				//multiModalNetwork.display(false);
-				dijkstras = new HashMap<String, MultiModalDijkstra>();
+				currentSimulation.dijkstras = new HashMap<String, MultiModalDijkstra>();
 				initFileSink();
 			}
 			/*
@@ -311,11 +329,11 @@ public class TransportOrganizerSkill extends Skill {
 			convertGamaGraphToGraphstreamGraph(scope, getGamaGraph(scope), subnetwork, getMode(scope));
 			connectMultiModalNodesToSubnetwork(scope, nodes, getGamaGraph(scope), subnetwork, mode);
 			connectMultiModalNodesToMainNetwork(nodes, subnetwork, mode);
-			if(modes == null)
-				modes = new HashMap<String, Graph>();
-			modes.put(getMode(scope), subnetwork);
+			if(currentSimulation.modes == null)
+				currentSimulation.modes = new HashMap<String, Graph>();
+			currentSimulation.modes.put(getMode(scope), subnetwork);
 			flush();
-			scope.getSimulation().setAttribute("multiModalNetwork", multiModalNetwork);
+			scope.getSimulation().setAttribute("multiModalNetwork", currentSimulation.multiModalNetwork);
 		}
 		catch(Exception e){
 			e.printStackTrace();
@@ -329,7 +347,7 @@ public class TransportOrganizerSkill extends Skill {
 			// We get (or create if needed) the graphstream node of the multimodal network corresponding to the current gama agent
 			Node currentGSNode = (Node) multiModalNode.getAttribute("graphstream_node_main");
 			if(currentGSNode == null){
-				currentGSNode = multiModalNetwork.addNode(multiModalNode.toString());
+				currentGSNode = currentSimulation.multiModalNetwork.addNode(multiModalNode.toString());
 				currentGSNode.addAttribute("gama_agent", multiModalNode);
 				currentGSNode.addAttribute("multiModalNode", true);
 				multiModalNode.setAttribute("graphstream_node_main", currentGSNode);
@@ -360,14 +378,14 @@ public class TransportOrganizerSkill extends Skill {
 			// Warehouse are not connected together
 			if(!gamaAgent1.getName().contains("Warehouse") && !gamaAgent1.getName().contains("Building") ){
 				// We get the graphstream node corresponding to the current gama agent
-				Node gsNode1 = multiModalNetwork.getNode(gamaAgent1.toString());
+				Node gsNode1 = currentSimulation.multiModalNetwork.getNode(gamaAgent1.toString());
 				for(int j = 0; j<nodes.size(); j++){
 					if(j!=i){
 						IAgent gamaAgent2 = (IAgent) nodes.get(j);
 						if(!gamaAgent2.getName().contains("Warehouse") && !gamaAgent2.getName().contains("Building") ){
 							// We get the graphstream node corresponding to the current gama agent
-							Node gsNode2 = multiModalNetwork.getNode(gamaAgent2.toString());
-							Edge e = multiModalNetwork.addEdge(gsNode1.getId()+"_"+gsNode2.getId()+"_"+mode, gsNode1, gsNode2);
+							Node gsNode2 = currentSimulation.multiModalNetwork.getNode(gamaAgent2.toString());
+							Edge e = currentSimulation.multiModalNetwork.addEdge(gsNode1.getId()+"_"+gsNode2.getId()+"_"+mode, gsNode1, gsNode2);
 							e.addAttribute("subnetwork", graph);
 							//e.addAttribute("ui.style", "fill-color: rgb("+color.getRed()+","+color.getGreen()+","+color.getBlue()+");");
 						}
@@ -386,7 +404,7 @@ public class TransportOrganizerSkill extends Skill {
 			ArrayList<String> toBeConnected = new ArrayList<String>();
 			for(int i = 0; i<nodes.size(); i++){
 				IAgent gamaAgent1 = (IAgent) nodes.get(i);
-				Node gsNode1 = multiModalNetwork.getNode(gamaAgent1.toString());
+				Node gsNode1 = currentSimulation.multiModalNetwork.getNode(gamaAgent1.toString());
 				if(!gamaAgent1.getName().contains("Warehouse") && !gamaAgent1.getName().contains("Building") ){
 					toBeConnected.add(gsNode1.getId());
 				}
@@ -397,7 +415,7 @@ public class TransportOrganizerSkill extends Skill {
 					((ArrayList<String>) gsNode1.getAttribute("modes_id")).add(graph.getId());
 				}
 			}
-			multiModalNetwork.addAttribute("toBeConnected_"+graph.getId(), toBeConnected);
+			currentSimulation.multiModalNetwork.addAttribute("toBeConnected_"+graph.getId(), toBeConnected);
 		}
 		flush();
 	}
@@ -435,21 +453,21 @@ public class TransportOrganizerSkill extends Skill {
 
 	private void connectToMainNetwork(Node n){
 		for(String mode : (ArrayList<String>) n.getAttribute("modes_id")){
-			ArrayList<String> toBeConnected = (ArrayList<String>) multiModalNetwork.getAttribute("toBeConnected_"+mode);
+			ArrayList<String> toBeConnected = (ArrayList<String>) currentSimulation.multiModalNetwork.getAttribute("toBeConnected_"+mode);
 			for(String s : toBeConnected){
-				Node n2 = multiModalNetwork.getNode(s);
-				Edge e = multiModalNetwork.addEdge(n.getId()+"_"+n2.getId(), n, n2);
-				e.addAttribute("subnetwork", modes.get(mode));
+				Node n2 = currentSimulation.multiModalNetwork.getNode(s);
+				Edge e = currentSimulation.multiModalNetwork.addEdge(n.getId()+"_"+n2.getId(), n, n2);
+				e.addAttribute("subnetwork", currentSimulation.modes.get(mode));
 			}
 		}
 	}
 
 	private void disconnectToMainNetwork(Node n){
 		for(String mode : (ArrayList<String>) n.getAttribute("modes_id")){
-			ArrayList<String> toBeConnected = (ArrayList<String>) multiModalNetwork.getAttribute("toBeConnected_"+mode);
+			ArrayList<String> toBeConnected = (ArrayList<String>) currentSimulation.multiModalNetwork.getAttribute("toBeConnected_"+mode);
 			for(String s : toBeConnected){
-				Node n2 = multiModalNetwork.getNode(s);
-				multiModalNetwork.removeEdge(n, n2);
+				Node n2 = currentSimulation.multiModalNetwork.getNode(s);
+				currentSimulation.multiModalNetwork.removeEdge(n, n2);
 			}
 		}
 	}
@@ -466,11 +484,12 @@ public class TransportOrganizerSkill extends Skill {
 					examples = { @example("path <- compute_shortest_path(my_origin_agent, my_destination_agent, 'travel_time', my_commodity);") })
 	)
 	public IList computeShortestPath(final IScope scope) throws GamaRuntimeException {
+		getCurrentSimulation(scope);
 		// First, we get the dijsktra we need (there is one dijsktra per strategy)
 		MultiModalDijkstra dijkstra;
 		String strategy = getStrategy(scope);
-		if(dijkstras.containsKey("dijkstra_"+strategy)){
-			dijkstra = dijkstras.get("dijkstra_"+strategy);
+		if(currentSimulation.dijkstras.containsKey("dijkstra_"+strategy)){
+			dijkstra = currentSimulation.dijkstras.get("dijkstra_"+strategy);
 		}
 		else{
 			if(strategy.equals("travel_time")){
@@ -478,8 +497,8 @@ public class TransportOrganizerSkill extends Skill {
 			}else{
 				dijkstra = new MultiModalDijkstra("dijkstra_"+strategy, new FinancialCosts(this, scope));
 			}
-			dijkstra.init(multiModalNetwork);
-			dijkstras.put("dijkstra_"+strategy, dijkstra);
+			dijkstra.init(currentSimulation.multiModalNetwork);
+			currentSimulation.dijkstras.put("dijkstra_"+strategy, dijkstra);
 		}
 		//Get the graphstream source and target node
 		IAgent gamaSource = (IAgent) scope.getArg(IKeywordTOAdditional.ORIGIN, IType.AGENT);
@@ -498,7 +517,8 @@ public class TransportOrganizerSkill extends Skill {
 
 		// Compute and get the path
 		dijkstra.setSource(sourceNode);
-		dijkstra.compute((double)((IAgent) scope.getArg(IKeywordTOAdditional.COMMODITY, IType.AGENT)).getAttribute("volume"));
+		IAgent commodity = (IAgent) scope.getArg(IKeywordTOAdditional.COMMODITY, IType.AGENT);
+		dijkstra.compute((double)(commodity.getAttribute("volume")));
 		flush();
 		Path p = dijkstra.getPath(targetNode);
 		// Construct the output list with intermodal nodes and networks between them
@@ -508,11 +528,9 @@ public class TransportOrganizerSkill extends Skill {
 
 		for(int i = 0; i < nodes.size(); i++){
 			Node n = nodes.get(i);
-			// We build the returned path with the multi modal nodes and the graphs between them that must be followed by the goods
+			// We build the returned path with the multi modal nodes of the path that must be followed by the goods
 			path.add(n.getAttribute("gama_agent"));
 			if(i < nodes.size()-1){
-				path.add(((Graph)edges.get(i).getAttribute("subnetwork")).getAttribute("gamaGraph"));
-				
 				String graphType = ((Graph)edges.get(i).getAttribute("subnetwork")).getId();
 				GamaDate departureDate = scope.getClock().getCurrentDate() // and when does it leave.
 						.plusMillis((double)((IAgent)n.getAttribute("gama_agent")).getAttribute("handling_time_to_"+graphType)*3600*1000)
@@ -541,7 +559,7 @@ public class TransportOrganizerSkill extends Skill {
 		if(gamaTarget.getName().contains("Warehouse") || gamaTarget.getName().contains("Building") ){
 			disconnectToMainNetwork(targetNode);
 		}
-
+		commodity.setAttribute("costs", dijkstra.getPathFinancialCostLength(targetNode));
 		return path;
 	}
 
@@ -557,11 +575,12 @@ public class TransportOrganizerSkill extends Skill {
 					examples = { @example("do get_shortest_path_length origin:my_origin_agent destination:my_destination_agent strategy:'travel_time' commodity:my_commodity;") })
 	)
 	public double getPathTimeLength(final IScope scope) throws GamaRuntimeException {
+		getCurrentSimulation(scope);
 		// First, we get the dijsktra we need (there is one dijsktra per strategy)
 		MultiModalDijkstra dijkstra;
 		String strategy = getStrategy(scope);
-		if(dijkstras.containsKey("dijkstra_"+strategy)){
-			dijkstra = dijkstras.get("dijkstra_"+strategy);
+		if(currentSimulation.dijkstras.containsKey("dijkstra_"+strategy)){
+			dijkstra = currentSimulation.dijkstras.get("dijkstra_"+strategy);
 		}
 		else{
 			if(strategy.equals("travel_time")){
@@ -569,8 +588,8 @@ public class TransportOrganizerSkill extends Skill {
 			}else{
 				dijkstra = new MultiModalDijkstra("dijkstra_"+strategy, new FinancialCosts(this, scope));
 			}
-			dijkstra.init(multiModalNetwork);
-			dijkstras.put("dijkstra_"+strategy, dijkstra);
+			dijkstra.init(currentSimulation.multiModalNetwork);
+			currentSimulation.dijkstras.put("dijkstra_"+strategy, dijkstra);
 		}
 		//Get the graphstream source and target node
 		IAgent gamaSource = (IAgent) scope.getArg(IKeywordTOAdditional.ORIGIN, IType.AGENT);
@@ -583,7 +602,7 @@ public class TransportOrganizerSkill extends Skill {
 		IAgent gamaTarget = (IAgent) scope.getArg(IKeywordTOAdditional.DESTINATION, IType.AGENT);
 		Node targetNode = (Node) gamaTarget.getAttribute("graphstream_node_main");
 
-		if(gamaTarget.getName().contains("Warehouse") || gamaTarget.getName().contains("Building") ){
+		if(gamaTarget.getName().contains("Warehouse") || gamaTarget.getName().contains("Building")){
 			connectToMainNetwork(targetNode);
 		}
 
@@ -597,7 +616,7 @@ public class TransportOrganizerSkill extends Skill {
 			disconnectToMainNetwork(sourceNode);
 		}
 
-		if(gamaTarget.getName().contains("Warehouse") || gamaTarget.getName().contains("Building") ){
+		if(gamaTarget.getName().contains("Warehouse") || gamaTarget.getName().contains("Building")){
 			disconnectToMainNetwork(targetNode);
 		}
 
@@ -613,6 +632,7 @@ public class TransportOrganizerSkill extends Skill {
 		@doc(value = "Block an edge ", examples = { @example("do block_edge edge:a_road;") })
 	)
 	public void blockEdgeAction(final IScope scope) throws GamaRuntimeException {
+		getCurrentSimulation(scope);
 		blockOrUnblockEdge(scope, true);
 	}
 
@@ -625,6 +645,7 @@ public class TransportOrganizerSkill extends Skill {
 		@doc(value = "Unblock an edge", examples = { @example("do unblock_edge edge:a_road;") })
 	)
 	public void unblockEdgeAction(final IScope scope) throws GamaRuntimeException {
+		getCurrentSimulation(scope);
 		blockOrUnblockEdge(scope, false);
 	}
 
@@ -634,7 +655,7 @@ public class TransportOrganizerSkill extends Skill {
 			gama_edge.setAttribute("blocked", bool);
 			Edge e = ((Edge)gama_edge.getAttribute("graphstream_edge"));
 			e.addAttribute("blocked_edge", bool);
-			dijkstras.forEach((k,v) -> v.clear());
+			currentSimulation.dijkstras.forEach((k,v) -> v.clear());
 		}
 	}
 }
