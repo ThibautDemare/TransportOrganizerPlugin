@@ -54,7 +54,7 @@ public class TransporterSkill extends Skill{
 					// - the current date + the handling time (= minimalDepartureDate)
 					// => it is equal to the "minimalDepartureDate
 					// - the previous vehicle departure + the minimal time between two vehicles
-				GamaDate lastVehicleDeparture = ((GamaDate)buildingSource.getAttribute("lastVehicleDeparture"));
+				GamaDate lastVehicleDeparture = ((GamaDate)buildingSource.getAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType")));
 				if(lastVehicleDeparture != null) {
 					GamaDate date = lastVehicleDeparture
 							.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
@@ -70,7 +70,7 @@ public class TransporterSkill extends Skill{
 			// 2) There is at least one vehicle but we can not use it (it is full or we don't have time to handle the goods before it leaves)
 				// the departure date of the next vehicle is :
 					// the departure date of the last vehicle + the minimal time between two vehicles
-			return ((GamaDate)buildingSource.getAttribute("lastVehicleDeparture"))
+			return ((GamaDate)buildingSource.getAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType")))
 					.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
 		}
 		// Else, we return the departure date of the found vehicle
@@ -115,32 +115,32 @@ public class TransporterSkill extends Skill{
 				// the greater date between :
 					// - the current date + the handling time (= minimalDepartureDate)
 					// - the previous vehicle departure + the minimal time between two vehicles
-				GamaDate lastVehicleDeparture = ((GamaDate)building.getAttribute("lastVehicleDeparture"));
+				GamaDate lastVehicleDeparture = ((GamaDate)building.getAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType")));
 				if(lastVehicleDeparture != null) {
 					GamaDate date = lastVehicleDeparture
 							.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
 					if(minimalDepartureDate.isGreaterThan(date, false)) {
 						vehicle.setAttribute("departureDate", minimalDepartureDate);
-						building.setAttribute("lastVehicleDeparture", minimalDepartureDate);
+						building.setAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType"), minimalDepartureDate);
 					}
 					else {
 						vehicle.setAttribute("departureDate", date);
-						building.setAttribute("lastVehicleDeparture", date);
+						building.setAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType"), date);
 					}
 				}
 				else {
 					vehicle.setAttribute("departureDate", minimalDepartureDate);
-					building.setAttribute("lastVehicleDeparture", minimalDepartureDate);
+					building.setAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType"), minimalDepartureDate);
 				}
 			}
 			else {
 				// There is at least one vehicle but we can not use it (it is full or we don't have time to handle the goods before it leaves)
 					// the departure date of the next vehicle is :
 						// the departure date of the last vehicle + the minimal time between two vehicles
-				GamaDate d = ((GamaDate)building.getAttribute("lastVehicleDeparture"))
+				GamaDate d = ((GamaDate)building.getAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType")))
 						.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
 				vehicle.setAttribute("departureDate",  d);
-				building.setAttribute("lastVehicleDeparture", d);
+				building.setAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType"), d);
 			}
 		}
 		else {
