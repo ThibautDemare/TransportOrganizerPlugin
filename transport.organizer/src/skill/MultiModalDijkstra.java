@@ -256,7 +256,6 @@ public class MultiModalDijkstra extends AbstractSpanningTree {
 				data.edgeFromParent = null;
 			}
 			node.removeAttribute(resultAttribute);
-
 		}
 
 		for(Edge e : graph.getEachEdge()) {
