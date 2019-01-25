@@ -387,6 +387,7 @@ public class TransportOrganizerSkill extends Skill {
 							Node gsNode2 = currentSimulation.multiModalNetwork.getNode(gamaAgent2.toString());
 							Edge e = currentSimulation.multiModalNetwork.addEdge(gsNode1.getId()+"_"+gsNode2.getId()+"_"+mode, gsNode1, gsNode2);
 							e.addAttribute("subnetwork", graph);
+							e.addAttribute("subnetwork_id", graph.getId());
 							//e.addAttribute("ui.style", "fill-color: rgb("+color.getRed()+","+color.getGreen()+","+color.getBlue()+");");
 						}
 						else {
@@ -525,7 +526,8 @@ public class TransportOrganizerSkill extends Skill {
 		IList path = GamaListFactory.create();
 		List<Node> nodes = p.getNodePath();
 		List<Edge> edges = p.getEdgePath();
-
+		double addedSeconds = 0.0;
+		double addedMinutes = 0.0;
 		for(int i = 0; i < nodes.size(); i++){
 			Node n = nodes.get(i);
 			// We build the returned path with the multi modal nodes of the path that must be followed by the goods
@@ -534,11 +536,15 @@ public class TransportOrganizerSkill extends Skill {
 				String graphType = ((Graph)edges.get(i).getAttribute("subnetwork")).getId();
 				GamaDate departureDate = scope.getClock().getCurrentDate() // and when does it leave.
 						.plusMillis((double)((IAgent)n.getAttribute("gama_agent")).getAttribute("handling_time_to_"+graphType)*3600*1000)
-						.plusMillis(dijkstra.getPathTimeLength(n)*3600*1000);
+						.plusMillis(dijkstra.getPathTimeLength(n)*3600*1000)
+						.plus(addedSeconds, ChronoUnit.SECONDS)
+						.plus(addedMinutes, ChronoUnit.MINUTES);
 				if(departureDate.getSecond() != 0){
+					addedSeconds += 60-departureDate.getSecond();
 					departureDate = departureDate.plus(60-departureDate.getSecond(), ChronoUnit.SECONDS);
 				}
 				if(departureDate.getMinute() != 0 ){
+					addedMinutes += 60-departureDate.getMinute();
 					departureDate = departureDate.plus(60-departureDate.getMinute(), ChronoUnit.MINUTES);
 				}
 				TransporterSkill.registerDepartureDate(
@@ -551,7 +557,6 @@ public class TransportOrganizerSkill extends Skill {
 				);
 			}
 		}
-
 		if(gamaSource.getName().contains("Warehouse") || gamaSource.getName().contains("Building") ){
 			disconnectToMainNetwork(sourceNode);
 		}

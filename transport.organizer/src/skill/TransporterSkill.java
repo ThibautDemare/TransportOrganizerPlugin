@@ -1,5 +1,7 @@
 package skill;
 
+import java.time.temporal.ChronoUnit;
+
 import org.graphstream.graph.Edge;
 import org.graphstream.graph.Node;
 
@@ -25,7 +27,7 @@ public class TransporterSkill extends Skill{
 		IAgent buildingSource = source.getAttribute("gama_agent");
 		IAgent buildingDest = dest.getAttribute("gama_agent");
 		// Then we get the list of leaving vehicle of this node
-		IList vehicles = (IList) buildingSource.getAttribute("leavingVehicles");
+		IList vehicles = (IList) buildingSource.getAttribute("leavingVehicles_"+(String)transporter.getAttribute("networkType"));
 
 		// Then, we browse these vehicles,
 		// and we try to find a vehicle which can carry the volume of goods and whose the departure date is OK (meaning: we have the time to handle the goods before the vehicles actually leaves)
@@ -35,7 +37,7 @@ public class TransporterSkill extends Skill{
 		for(int i = 0; i < vehicles.size() && notfound; i++){
 			IAgent currentVehicle = (IAgent) vehicles.get(i);
 			if((IAgent) currentVehicle.getAttribute("destination") == buildingDest){
-				if(((double) currentVehicle.getAttribute("currentTransportedVolume") + volume) <= (double) transporter.getAttribute("maximalTransportedVolume")){
+				if(((double) currentVehicle.getAttribute("scheduledTransportedVolume") + volume) <= (double) transporter.getAttribute("maximalTransportedVolume")){
 					GamaDate departureDate = (GamaDate) currentVehicle.getAttribute("departureDate");
 					if(departureDate.isGreaterThan(minimalDepartureDate, false)){
 						vehicle = currentVehicle;
@@ -44,6 +46,7 @@ public class TransporterSkill extends Skill{
 				}
 			}
 		}
+		GamaDate returnedDate;
 		// If we did not find a vehicle, we do as if we create a new one
 		if(vehicle == null){
 			// Two cases why we did not find a vehicle :
@@ -59,37 +62,43 @@ public class TransporterSkill extends Skill{
 					GamaDate date = lastVehicleDeparture
 							.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
 					if(minimalDepartureDate.isGreaterThan(date, false))
-						return minimalDepartureDate;
+						returnedDate = minimalDepartureDate;
 					else
-						return date;
+						returnedDate = date;
 				}
 				else {
-					return minimalDepartureDate;
+					returnedDate = minimalDepartureDate;
 				}
 			}
-			// 2) There is at least one vehicle but we can not use it (it is full or we don't have time to handle the goods before it leaves)
+			else {
+				// 2) There is at least one vehicle but we can not use it (it is full or we don't have time to handle the goods before it leaves)
 				// the departure date of the next vehicle is :
 					// the departure date of the last vehicle + the minimal time between two vehicles
-			return ((GamaDate)buildingSource.getAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType")))
-					.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
+				returnedDate = ((GamaDate)buildingSource.getAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType")))
+						.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
+			}
 		}
-		// Else, we return the departure date of the found vehicle
-		return (GamaDate) vehicle.getAttribute("departureDate");
+		else {
+			// Else, we return the departure date of the found vehicle
+			returnedDate = (GamaDate) vehicle.getAttribute("departureDate");
+		}
+		roundDate(scope, returnedDate);
+		return returnedDate;
 	}
 
 	public static void registerDepartureDate(final IScope scope, IAgent transporter, IAgent commodity, Node currentNode, Node destination, GamaDate minimalDepartureDate) {
 		// We get the gama agent associated to the GS node
 		IAgent building = currentNode.getAttribute("gama_agent");
 		// Then we get the list of leaving vehicle of this node
-		IList vehicles = (IList) building.getAttribute("leavingVehicles");
+		IList vehicles = (IList) building.getAttribute("leavingVehicles_"+(String)transporter.getAttribute("networkType"));
 		// Then, we browse these vehicles,
 		// and we try to find a vehicle which can carry the volume of goods and whose the departure date is OK (meaning: we have the time to handle the goods before the vehicles actually leaves)
 		IAgent vehicle = null;
 		boolean notfound = true;
 		for(int i = 0; i < vehicles.size() && notfound; i++){
 			IAgent currentVehicle = (IAgent) vehicles.get(i);
-			if(destination.getAttribute("gama_agent") == vehicle.getAttribute("destination")){
-				if(((double) currentVehicle.getAttribute("currentTransportedVolume") + (double)commodity.getAttribute("volume")) <= (double) transporter.getAttribute("maximalTransportedVolume")){
+			if(destination.getAttribute("gama_agent") == currentVehicle.getAttribute("destination")){
+				if(((double) currentVehicle.getAttribute("scheduledTransportedVolume") + (double)commodity.getAttribute("volume")) <= (double) transporter.getAttribute("maximalTransportedVolume")){
 					GamaDate departureDate = (GamaDate) currentVehicle.getAttribute("departureDate");
 					if(departureDate.isGreaterThan(minimalDepartureDate, false)){
 						vehicle = currentVehicle;
@@ -102,6 +111,7 @@ public class TransporterSkill extends Skill{
 		if(vehicle == null){
 			vehicle = scope.getSimulation().getPopulationFor("Vehicle").createAgents(scope, 1, null, false, false).get(0);
 			vehicle.setLocation(building.getLocation());
+			vehicle.setAttribute("scheduledTransportedVolume", ((double) commodity.getAttribute("volume")));
 			IList scheduledCommodities = ((IList)vehicle.getAttribute("scheduledCommodities"));
 			scheduledCommodities.add(commodity);
 			vehicle.setAttribute("scheduledCommodities", scheduledCommodities);
@@ -117,8 +127,9 @@ public class TransporterSkill extends Skill{
 					// - the previous vehicle departure + the minimal time between two vehicles
 				GamaDate lastVehicleDeparture = ((GamaDate)building.getAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType")));
 				if(lastVehicleDeparture != null) {
-					GamaDate date = lastVehicleDeparture
-							.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
+					GamaDate date = roundDate(scope, lastVehicleDeparture
+							.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000));
+
 					if(minimalDepartureDate.isGreaterThan(date, false)) {
 						vehicle.setAttribute("departureDate", minimalDepartureDate);
 						building.setAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType"), minimalDepartureDate);
@@ -137,18 +148,30 @@ public class TransporterSkill extends Skill{
 				// There is at least one vehicle but we can not use it (it is full or we don't have time to handle the goods before it leaves)
 					// the departure date of the next vehicle is :
 						// the departure date of the last vehicle + the minimal time between two vehicles
-				GamaDate d = ((GamaDate)building.getAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType")))
-						.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
-				vehicle.setAttribute("departureDate",  d);
-				building.setAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType"), d);
+				GamaDate date = roundDate(scope, ((GamaDate)building.getAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType")))
+						.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000));
+				vehicle.setAttribute("departureDate",  date);
+				building.setAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType"), date);
 			}
+			vehicles.add(vehicle);
 		}
 		else {
 			// We use the found vehicle
 			// We add the commodity to the transported commodities
+			vehicle.setAttribute("scheduledTransportedVolume",
+					((double) vehicle.getAttribute("scheduledTransportedVolume")) + ((double) commodity.getAttribute("volume")));
 			IList scheduledCommodities = ((IList)vehicle.getAttribute("scheduledCommodities"));
 			scheduledCommodities.add(commodity);
 			vehicle.setAttribute("scheduledCommodities", scheduledCommodities);
 		}
+	}
+
+	private static GamaDate roundDate(final IScope scope, GamaDate date) {
+		GamaDate returnedDate = new GamaDate(scope, date);
+		if(returnedDate.getSecond() != 0)
+			returnedDate = returnedDate.plus(60-returnedDate.getSecond(), ChronoUnit.SECONDS);
+		if(returnedDate.getMinute() != 0 )
+			returnedDate = returnedDate.plus(60-returnedDate.getMinute(), ChronoUnit.MINUTES);
+		return returnedDate;
 	}
 }
