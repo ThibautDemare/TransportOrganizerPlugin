@@ -65,7 +65,6 @@ public abstract class NumberProvider {
 			return Double.POSITIVE_INFINITY;
 
 		double res = 0;
-		// first, we add the time to cross the edge
 		if(e.hasAttribute("length") && e.hasAttribute("speed")){
 			res += e.getNumber("length") / e.getNumber("speed");
 		}
