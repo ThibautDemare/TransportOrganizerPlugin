@@ -14,8 +14,6 @@ public class FinancialCosts extends NumberProvider {
 
 	@Override
 	public double getEdgeCost(Node source, Edge e, Node dest, double volume) {
-		if(e.hasAttribute("blocked_edge") && (boolean)e.getAttribute("blocked_edge"))
-			return Double.POSITIVE_INFINITY;
 		return getFinancialCostLength(source, e, dest, volume);
 	}
 
