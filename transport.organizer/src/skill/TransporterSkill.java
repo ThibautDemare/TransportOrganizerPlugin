@@ -46,12 +46,12 @@ public class TransporterSkill extends Skill{
 				}
 			}
 		}
-		GamaDate returnedDate;
+		GamaDate returnedDate = null;
 		// If we did not find a vehicle, we do as if we create a new one
 		if(vehicle == null){
 			// Two cases why we did not find a vehicle :
-			// 1) The list is empty
 			if(vehicles.size() == 0){
+				// 1) The list is empty
 				// the departure date of the next vehicle is :
 				// the greater date between :
 					// - the current date + the handling time (= minimalDepartureDate)
@@ -71,11 +71,37 @@ public class TransporterSkill extends Skill{
 				}
 			}
 			else {
-				// 2) There is at least one vehicle but we can not use it (it is full or we don't have time to handle the goods before it leaves)
-				// the departure date of the next vehicle is :
-					// the departure date of the last vehicle + the minimal time between two vehicles
-				returnedDate = ((GamaDate)buildingSource.getAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType")))
-						.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000);
+				// 2) There is at least one vehicle but we can not use it (it is full, or it doesn't go to the right destination or we don't have time to handle the goods before it leaves)
+				// the departure date of the next vehicle is one of the following :
+					// - a date between two vehicles departure if there is enough time to handle the goods after the first vehicle, and before the second one
+					// - the departure date of the last vehicle + the minimal time between two vehicles ( and only if it is after the minimal departure date)
+				// First case :
+				double timeBetweenVehicle = (double)transporter.getAttribute("timeBetweenVehicles")*3600*1000;
+				notfound = true;
+				for(int i = 0; i < vehicles.size() - 1 && notfound; i ++) {
+					IAgent v1 = (IAgent) vehicles.get(i);
+					GamaDate d1 = ((GamaDate) v1.getAttribute("departureDate"));
+					IAgent v2 = (IAgent) vehicles.get(i + 1);
+					GamaDate d2 = ((GamaDate) v2.getAttribute("departureDate"));
+					if(minimalDepartureDate.isGreaterThan(d1.plusMillis(timeBetweenVehicle), false) 
+							&& d2.isGreaterThan(minimalDepartureDate.plusMillis(timeBetweenVehicle), false)) {
+						returnedDate = minimalDepartureDate;
+						notfound = false;
+					}
+				}
+				// Second case :
+				// If it has not been found, it is because we can't shcedule the departure between two other vehicles.
+				// Therefore, we have to schedule it after the last vehicle. But there are still two cases :
+				// 1)
+				if(notfound) {
+					if( minimalDepartureDate.isGreaterThan(
+							((GamaDate)buildingSource.getAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType"))).plusMillis(timeBetweenVehicle), false) ) {
+						returnedDate = minimalDepartureDate;
+					}
+					else {
+						returnedDate = ((GamaDate)buildingSource.getAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType"))).plusMillis(timeBetweenVehicle);
+					}
+				}
 			}
 		}
 		else {
@@ -145,13 +171,40 @@ public class TransporterSkill extends Skill{
 				}
 			}
 			else {
-				// There is at least one vehicle but we can not use it (it is full or we don't have time to handle the goods before it leaves)
-					// the departure date of the next vehicle is :
-						// the departure date of the last vehicle + the minimal time between two vehicles
-				GamaDate date = roundDate(scope, ((GamaDate)building.getAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType")))
-						.plusMillis((double)transporter.getAttribute("timeBetweenVehicles")*3600*1000));
+				GamaDate date = null;
+				// 2) There is at least one vehicle but we can not use it (it is full, or it doesn't go to the right destination or we don't have time to handle the goods before it leaves)
+				// the departure date of the next vehicle is one of the following :
+					// - a date between two vehicles departure if there is enough time to handle the goods after the first vehicle, and before the second one
+					// - the departure date of the last vehicle + the minimal time between two vehicles ( and only if it is after the minimal departure date)
+				// First case :
+				double timeBetweenVehicle = (double)transporter.getAttribute("timeBetweenVehicles")*3600*1000;
+				notfound = true;
+				for(int i = 0; i < vehicles.size() - 1 && notfound; i ++) {
+					IAgent v1 = (IAgent) vehicles.get(i);
+					GamaDate d1 = ((GamaDate) v1.getAttribute("departureDate"));
+					IAgent v2 = (IAgent) vehicles.get(i + 1);
+					GamaDate d2 = ((GamaDate) v2.getAttribute("departureDate"));
+					if(minimalDepartureDate.isGreaterThan(d1.plusMillis(timeBetweenVehicle), false) 
+							&& d2.isGreaterThan(minimalDepartureDate.plusMillis(timeBetweenVehicle), false)) {
+						date = minimalDepartureDate;
+						notfound = false;
+					}
+				}
+				// Second case :
+				// If it has not been found, it is because we can't shcedule the departure between two other vehicles.
+				// Therefore, we have to schedule it after the last vehicle. But there are still two cases :
+				// 1)
+				if(notfound) {
+					if( minimalDepartureDate.isGreaterThan(
+							((GamaDate)building.getAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType"))).plusMillis(timeBetweenVehicle), false) ) {
+						date = minimalDepartureDate;
+					}
+					else {
+						date = ((GamaDate)building.getAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType"))).plusMillis(timeBetweenVehicle);
+					}
+					building.setAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType"), date);
+				}
 				vehicle.setAttribute("departureDate",  date);
-				building.setAttribute("lastVehicleDeparture_"+(String)transporter.getAttribute("networkType"), date);
 			}
 			vehicles.add(vehicle);
 		}
