@@ -446,7 +446,7 @@ public class TransportOrganizerSkill extends Skill {
 			// Create an edge between the current GS node and these two other nodes
 			Edge e = currentGSNode.getGraph().addEdge(currentGSNode+"_"+node, currentGSNode, node);
 			e.addAttribute("length", Math.hypot(currentGSNode.getNumber("x")-node.getNumber("x"), currentGSNode.getNumber("y")-node.getNumber("y")) / 1000); // Hypot returns a measure in meter. I want km.
-			e.addAttribute("speed", 10);
+			e.addAttribute("speed", 30);
 			e.addAttribute("graph_type", ""+node.getAttribute("graph_type"));
 		}
 		flush();
