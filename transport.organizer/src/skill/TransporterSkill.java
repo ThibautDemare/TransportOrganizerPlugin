@@ -22,10 +22,10 @@ public class TransporterSkill extends Skill{
 	}
 
 	public static GamaDate getDepartureDate(final IScope scope, IAgent transporter, 
-			Node source, Node dest, GamaDate minimalDepartureDate, double volume) {
+			Node source, Node destination, GamaDate minimalDepartureDate, double volume) {
 		// We get the gama agent associated to the GS node
 		IAgent buildingSource = source.getAttribute("gama_agent");
-		IAgent buildingDest = dest.getAttribute("gama_agent");
+		IAgent buildingDest = destination.getAttribute("gama_agent");
 		// Then we get the list of leaving vehicle of this node
 		IList vehicles = (IList) buildingSource.getAttribute("leavingVehicles_"+(String)transporter.getAttribute("networkType"));
 
@@ -33,15 +33,16 @@ public class TransporterSkill extends Skill{
 		// and we try to find a vehicle which can carry the volume of goods and whose the departure date is OK (meaning: we have the time to handle the goods before the vehicles actually leaves)
 		// and whose the destination is the same
 		IAgent vehicle = null;
-		boolean notfound = true;
-		for(int i = 0; i < vehicles.size() && notfound; i++){
+		for(int i = 0; i < vehicles.size(); i++){
 			IAgent currentVehicle = (IAgent) vehicles.get(i);
-			if((IAgent) currentVehicle.getAttribute("destination") == buildingDest){
+			if(destination.getAttribute("gama_agent") == currentVehicle.getAttribute("destination")){
 				if(((double) currentVehicle.getAttribute("scheduledTransportedVolume") + volume) <= (double) transporter.getAttribute("maximalTransportedVolume")){
 					GamaDate departureDate = (GamaDate) currentVehicle.getAttribute("departureDate");
 					if(departureDate.isGreaterThan(minimalDepartureDate, false)){
-						vehicle = currentVehicle;
-						notfound = false;
+						if(vehicle == null)
+							vehicle = currentVehicle;
+						else if( ((GamaDate)vehicle.getAttribute("departureDate")).isGreaterThan(departureDate, false))
+							vehicle = currentVehicle;
 					}
 				}
 			}
@@ -77,7 +78,7 @@ public class TransporterSkill extends Skill{
 					// - the departure date of the last vehicle + the minimal time between two vehicles ( and only if it is after the minimal departure date)
 				// First case :
 				double timeBetweenVehicle = (double)transporter.getAttribute("timeBetweenVehicles")*3600*1000;
-				notfound = true;
+				boolean notfound = true;
 				for(int i = 0; i < vehicles.size() - 1 && notfound; i ++) {
 					IAgent v1 = (IAgent) vehicles.get(i);
 					GamaDate d1 = ((GamaDate) v1.getAttribute("departureDate"));
@@ -120,15 +121,16 @@ public class TransporterSkill extends Skill{
 		// Then, we browse these vehicles,
 		// and we try to find a vehicle which can carry the volume of goods and whose the departure date is OK (meaning: we have the time to handle the goods before the vehicles actually leaves)
 		IAgent vehicle = null;
-		boolean notfound = true;
-		for(int i = 0; i < vehicles.size() && notfound; i++){
+		for(int i = 0; i < vehicles.size(); i++){
 			IAgent currentVehicle = (IAgent) vehicles.get(i);
 			if(destination.getAttribute("gama_agent") == currentVehicle.getAttribute("destination")){
 				if(((double) currentVehicle.getAttribute("scheduledTransportedVolume") + (double)commodity.getAttribute("volume")) <= (double) transporter.getAttribute("maximalTransportedVolume")){
 					GamaDate departureDate = (GamaDate) currentVehicle.getAttribute("departureDate");
 					if(departureDate.isGreaterThan(minimalDepartureDate, false)){
-						vehicle = currentVehicle;
-						notfound = false;
+						if(vehicle == null)
+							vehicle = currentVehicle;
+						else if( ((GamaDate)vehicle.getAttribute("departureDate")).isGreaterThan(departureDate, false))
+							vehicle = currentVehicle;
 					}
 				}
 			}
@@ -178,7 +180,7 @@ public class TransporterSkill extends Skill{
 					// - the departure date of the last vehicle + the minimal time between two vehicles ( and only if it is after the minimal departure date)
 				// First case :
 				double timeBetweenVehicle = (double)transporter.getAttribute("timeBetweenVehicles")*3600*1000;
-				notfound = true;
+				boolean notfound = true;
 				for(int i = 0; i < vehicles.size() - 1 && notfound; i ++) {
 					IAgent v1 = (IAgent) vehicles.get(i);
 					GamaDate d1 = ((GamaDate) v1.getAttribute("departureDate"));
