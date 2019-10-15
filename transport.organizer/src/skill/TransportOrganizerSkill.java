@@ -320,8 +320,10 @@ public class TransportOrganizerSkill extends Skill {
 		String mode = (String) scope.getArg(IKeywordTOAdditional.MODE, IType.STRING);
 		Graph g = currentSimulation.modes.get(mode);
 		for(Edge e : g.getEachEdge()) {
-			IAgent gama_edge = e.getAttribute("gama_agent");
-			gama_edge.setAttribute("blocked", bool);
+			if(e.hasAttribute("gama_agent")) {
+				IAgent gama_edge = e.getAttribute("gama_agent");
+				gama_edge.setAttribute("blocked", bool);
+			}
 			e.addAttribute("blocked_edge", bool);
 		}
 		currentSimulation.dijkstras.forEach((k,v) -> v.clear());
