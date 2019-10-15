@@ -360,13 +360,11 @@ public class MultiModalDijkstra extends AbstractSpanningTree {
 						e.addAttribute(resultAttribute+"_path_cost_length_from_"+u.getId(), d.getPathFinancialCostLength(g.getNode(e.getOpposite(u).getId())));
 					}
 					pathLength = e.getNumber(resultAttribute+"_path_length_from_"+u.getId());
-					if(pathLength == Double.POSITIVE_INFINITY)
+					Double dou = numberProvider.getMultiModalCost(u, e.getOpposite(u), g.getId(), currentDistance, volume);
+					if(pathLength == Double.POSITIVE_INFINITY || dou == Double.POSITIVE_INFINITY)
 						e.setAttribute(resultAttribute+"_length_from_"+u.getId(), Double.POSITIVE_INFINITY);
 					else
-						e.setAttribute(resultAttribute+"_length_from_"+u.getId(),
-							numberProvider.getMultiModalCost(u, e.getOpposite(u), g.getId(), currentDistance, volume) +
-							pathLength
-							);
+						e.setAttribute(resultAttribute+"_length_from_"+u.getId(), dou + pathLength);
 				}
 			}
 			if(d != null)
