@@ -18,11 +18,11 @@ public class TravelTime extends NumberProvider {
 		super(tos, scope);
 	}
 
-	public double getEdgeCost(Node source, Edge e, Node dest, double volume) {
+	public Double getEdgeCost(Node source, Edge e, Node dest, double volume) {
 		return NumberProvider.getTimeLength(source, e, dest);
 	}
 
-	public double getMultiModalCost(Node source, Node dest, String mode, double currentDistance, double volume) {
+	public Double getMultiModalCost(Node source, Node dest, String mode, double currentDistance, double volume) {
 		return getTimeMultiModalCost(source, dest, mode, currentDistance, volume);
 	}
 }
