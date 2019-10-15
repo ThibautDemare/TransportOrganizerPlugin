@@ -292,6 +292,42 @@ public class TransportOrganizerSkill extends Skill {
 	 */
 
 	@action(
+		name = "block_mode",
+		args = {
+				@arg(name = IKeywordTOAdditional.MODE, type = IType.STRING , optional = false, doc = @doc("Which mode of transport to block.")),
+		},
+		doc =
+		@doc(value = "Block a whole mode.", examples = { @example("do block_mode mode:'road';") })
+	)
+	public void blockMode(final IScope scope) throws GamaRuntimeException {
+		blockOrUnblockMode(scope, true);
+	}
+
+	@action(
+		name = "unblock_mode",
+		args = {
+				@arg(name = IKeywordTOAdditional.MODE, type = IType.STRING , optional = false, doc = @doc("Which mode of transport to unblock.")),
+		},
+		doc =
+		@doc(value = "Unblock a whole mode.", examples = { @example("do unblock_mode mode:'road';") })
+	)
+	public void unblockMode(final IScope scope) throws GamaRuntimeException {
+		blockOrUnblockMode(scope, false);
+	}
+
+	private void blockOrUnblockMode(final IScope scope, boolean bool) {
+		getCurrentSimulation(scope);
+		String mode = (String) scope.getArg(IKeywordTOAdditional.MODE, IType.STRING);
+		Graph g = currentSimulation.modes.get(mode);
+		for(Edge e : g.getEachEdge()) {
+			IAgent gama_edge = e.getAttribute("gama_agent");
+			gama_edge.setAttribute("blocked", bool);
+			e.addAttribute("blocked_edge", bool);
+		}
+		currentSimulation.dijkstras.forEach((k,v) -> v.clear());
+	}
+
+	@action(
 		name = "add_mode",
 		args = {
 				@arg(name = IKeywordTOAdditional.NETWORK, type = IType.GRAPH , optional = false, doc = @doc("the GAMA graph which needs to be added.")),
