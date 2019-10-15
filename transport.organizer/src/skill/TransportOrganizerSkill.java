@@ -232,8 +232,8 @@ public class TransportOrganizerSkill extends Skill {
 			if ( v instanceof IAgent ) {
 				IAgent a = (IAgent) v;
 				n.addAttribute("gama_agent", a);
-				for ( Object key : a.getAttributes().keySet() ) {
-					Object value = GraphUtilsGraphStream.preprocessGamaValue(a.getAttributes().get(key));
+				for ( Object key : a.getOrCreateAttributes().keySet() ) {
+					Object value = GraphUtilsGraphStream.preprocessGamaValue(a.getOrCreateAttributes().get(key));
 					if(value != null)
 						n.addAttribute(key.toString(), value.toString());
 				}
@@ -262,8 +262,8 @@ public class TransportOrganizerSkill extends Skill {
 					e.addAttribute("gama_agent", a);
 					e.addAttribute("gamaGraph", gamaGraph);
 					e.addAttribute("graph_type", graphType);
-					for ( Object key : a.getAttributes().keySet() ) {
-						Object value = GraphUtilsGraphStream.preprocessGamaValue(a.getAttributes().get(key));
+					for ( Object key : a.getOrCreateAttributes().keySet() ) {
+						Object value = GraphUtilsGraphStream.preprocessGamaValue(a.getOrCreateAttributes().get(key));
 						if(value != null)
 							e.addAttribute(key.toString(), value.toString());
 					}
@@ -351,8 +351,8 @@ public class TransportOrganizerSkill extends Skill {
 				currentGSNode.addAttribute("gama_agent", multiModalNode);
 				currentGSNode.addAttribute("multiModalNode", true);
 				multiModalNode.setAttribute("graphstream_node_main", currentGSNode);
-				for ( Object key : multiModalNode.getAttributes().keySet() ) {
-					Object value = GraphUtilsGraphStream.preprocessGamaValue(multiModalNode.getAttributes().get(key));
+				for ( Object key : multiModalNode.getOrCreateAttributes().keySet() ) {
+					Object value = GraphUtilsGraphStream.preprocessGamaValue(multiModalNode.getOrCreateAttributes().get(key));
 					if(value != null)
 						currentGSNode.addAttribute(key.toString(), value.toString());
 				}
@@ -431,8 +431,8 @@ public class TransportOrganizerSkill extends Skill {
 				currentGSNode.addAttribute("gama_agent", multiModalNode);
 				currentGSNode.addAttribute("multiModalNode", true);
 				multiModalNode.setAttribute("graphstream_node_"+mode, currentGSNode);
-				for ( Object key : multiModalNode.getAttributes().keySet() ) {
-					Object value = GraphUtilsGraphStream.preprocessGamaValue(multiModalNode.getAttributes().get(key));
+				for ( Object key : multiModalNode.getOrCreateAttributes().keySet() ) {
+					Object value = GraphUtilsGraphStream.preprocessGamaValue(multiModalNode.getOrCreateAttributes().get(key));
 					if(value != null)
 						currentGSNode.addAttribute(key.toString(), value.toString());
 				}
@@ -637,7 +637,6 @@ public class TransportOrganizerSkill extends Skill {
 		@doc(value = "Block an edge ", examples = { @example("do block_edge edge:a_road;") })
 	)
 	public void blockEdgeAction(final IScope scope) throws GamaRuntimeException {
-		getCurrentSimulation(scope);
 		blockOrUnblockEdge(scope, true);
 	}
 
@@ -650,11 +649,11 @@ public class TransportOrganizerSkill extends Skill {
 		@doc(value = "Unblock an edge", examples = { @example("do unblock_edge edge:a_road;") })
 	)
 	public void unblockEdgeAction(final IScope scope) throws GamaRuntimeException {
-		getCurrentSimulation(scope);
 		blockOrUnblockEdge(scope, false);
 	}
 
 	private void blockOrUnblockEdge(final IScope scope, boolean bool) {
+		getCurrentSimulation(scope);
 		final IAgent gama_edge = (IAgent) scope.getArg(IKeywordTOAdditional.EDGE, IType.AGENT);
 		if(gama_edge.hasAttribute("graphstream_edge")){
 			gama_edge.setAttribute("blocked", bool);
