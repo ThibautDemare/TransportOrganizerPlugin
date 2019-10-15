@@ -1,5 +1,6 @@
 package skill;
 
+import java.math.BigDecimal;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -26,9 +27,11 @@ public class TransporterSkill extends Skill{
 
 	public static GamaDate getDepartureDate(final IScope scope, IAgent transporter, 
 			Node source, Node destination, GamaDate minimalDepartureDate, double volume) {
+
 		// We get the gama agent associated to the GS node
 		IAgent buildingSource = source.getAttribute("gama_agent");
 		IAgent dest = destination.getAttribute("gama_agent");
+
 		// Then we get the list of leaving vehicle of this node
 		IList<IAgent> vehicles = (IList<IAgent>) buildingSource.getAttribute("leavingVehicles_"+(String)transporter.getAttribute("networkType"));
 		vehicles.sort(new Comparator<IAgent>() {
@@ -65,7 +68,6 @@ public class TransporterSkill extends Skill{
 		}
 		GamaDate returnedDate = null;
 		// If we did not find a vehicle, we do as if we create a new one
-		// If we did not find a vehicle, we create a new one
 		if(vehicle == null){
 			returnedDate = findBestDepartureDate(scope, transporter, buildingSource, dest, vehicles, minimalDepartureDate);
 		}
@@ -460,19 +462,28 @@ public class TransporterSkill extends Skill{
 	 * @param dest
 	 * @return
 	 */
-	private static double getTimeBeweenVehicleDest(final IScope scope, IAgent transporter, IAgent source, IAgent dest) {
+	public static Double getTimeBeweenVehicleDest(final IScope scope, IAgent transporter, IAgent source, IAgent dest) {
 		GamaMap mapParameters = (GamaMap) scope.getSimulation().getAttribute("mapParameters");
 		Double timeBetweenVehicles = null;
 		String sourceName = (String) source.getAttribute("cityName");
 		String destName = (String) dest.getAttribute("cityName");
+
 		if(mapParameters.containsKey(sourceName)) {
-			if( ((GamaMap)mapParameters.get(sourceName)).containsKey(sourceName) ){
-				timeBetweenVehicles = (Double)((GamaMap)((GamaMap)mapParameters.get(sourceName)).get(destName))
-						.get("timeBetweenVehicles_"+(String)transporter.getAttribute("networkType"));
+			if( ((GamaMap)mapParameters.get(sourceName)).containsKey(destName) ){
+				if( ((GamaMap)((GamaMap)mapParameters.get(sourceName)).get(destName))
+					.containsKey("timeBetweenVehicles_"+(String)transporter.getAttribute("networkType")) ){
+
+					timeBetweenVehicles = ((BigDecimal)(((GamaMap)((GamaMap)mapParameters.get(sourceName)).get(destName))
+							.get("timeBetweenVehicles_"+(String)transporter.getAttribute("networkType")))).doubleValue();
+
+					if(timeBetweenVehicles == -1) {
+						timeBetweenVehicles = Double.POSITIVE_INFINITY;
+					}
+				}
 			}
 		}
 		if(timeBetweenVehicles == null)
-			return -1;
+			return new Double(-1);
 		return timeBetweenVehicles;
 	}
 }
