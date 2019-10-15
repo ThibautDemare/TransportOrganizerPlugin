@@ -27,7 +27,7 @@ public abstract class NumberProvider {
 	 * @param volume
 	 * @return
 	 */
-	public abstract double getMultiModalCost(Node source, Node dest, String mode, double currentDistance, double volume);
+	public abstract Double getMultiModalCost(Node source, Node dest, String mode, double currentDistance, double volume);
 
 	/**
 	 * It returns the costs of an edge according to the source, destination and volume
@@ -37,7 +37,7 @@ public abstract class NumberProvider {
 	 * @param volume
 	 * @return
 	 */
-	public abstract double getEdgeCost(Node source, Edge e, Node dest, double volume);
+	public abstract Double getEdgeCost(Node source, Edge e, Node dest, double volume);
 
 	/**
 	 * It returns the time necessary to cross an edge
@@ -46,7 +46,7 @@ public abstract class NumberProvider {
 	 * @param dest
 	 * @return
 	 */
-	public double getFinancialCostLength(Node source, Edge e, Node dest, double volume) {
+	public Double getFinancialCostLength(Node source, Edge e, Node dest, double volume) {
 		if(e.hasAttribute("blocked_edge") && (boolean)e.getAttribute("blocked_edge"))
 			return Double.POSITIVE_INFINITY;
 		final IAgent transporter = tos.getTransporter(scope, e.getAttribute("graph_type"));
@@ -60,7 +60,7 @@ public abstract class NumberProvider {
 	 * @param dest
 	 * @return
 	 */
-	public static double getTimeLength(Node source, Edge e, Node dest) {
+	public static Double getTimeLength(Node source, Edge e, Node dest) {
 		if(e.hasAttribute("blocked_edge") && (boolean)e.getAttribute("blocked_edge"))
 			return Double.POSITIVE_INFINITY;
 
@@ -82,9 +82,17 @@ public abstract class NumberProvider {
 	 * @param volume
 	 * @return
 	 */
-	public double getTimeMultiModalCost(Node source, Node dest, String mode, double currentDistance, double volume) {
+	public Double getTimeMultiModalCost(Node source, Node dest, String mode, double currentDistance, double volume) {
 		double res = 0;
 		if(((IAgent)dest.getAttribute("gama_agent")).getAttribute("handling_time_from_"+mode) != null) {
+
+			// We first check if the constraint of time between vehicles allows some departure between the source and the destination
+			//To do so, we need to get the transporter agent on the next edge
+			final IAgent transporter = tos.getTransporter(scope, mode);
+			if(TransporterSkill.getTimeBeweenVehicleDest(scope, transporter, source.getAttribute("gama_agent"), dest.getAttribute("gama_agent")) == Double.POSITIVE_INFINITY){
+				return Double.POSITIVE_INFINITY;
+			}
+
 			// We need to know when the next available vehicle leaves the previous multimodal node (the source node)
 
 			// First, we get the date when the goods arrive to the source node
@@ -93,8 +101,7 @@ public abstract class NumberProvider {
 			double handlingTime = (double)((IAgent)source.getAttribute("gama_agent")).getAttribute("handling_time_to_"+mode);
 			GamaDate minimalDepartureDate = currentDate.plusMillis(handlingTime*3600*1000);
 
-			// Then, we can determine the departure date of the vehicle. To do so, we need to get the transporter agent on the next edge
-			final IAgent transporter = tos.getTransporter(scope, mode);
+			// Then, we can determine the departure date of the vehicle.
 			// But "transporter" is not an instance of TransporterSkill, therefore, I need to use a static method with the agent in parameter
 			GamaDate departure = TransporterSkill.getDepartureDate(scope, transporter, source, dest, minimalDepartureDate, volume);
 
