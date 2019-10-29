@@ -433,15 +433,6 @@ public class TransporterSkill extends Skill{
 		return vehicle;
 	}
 
-	private static GamaDate roundDate(final IScope scope, GamaDate date) {
-		GamaDate returnedDate = new GamaDate(scope, date);
-		if(returnedDate.getSecond() != 0)
-			returnedDate = returnedDate.plus(60-returnedDate.getSecond(), ChronoUnit.SECONDS);
-		if(returnedDate.getMinute() != 0 )
-			returnedDate = returnedDate.plus(60-returnedDate.getMinute(), ChronoUnit.MINUTES);
-		return returnedDate;
-	}
-
 	/**
 	 * This method returns the time between vehicles that should be considered for a specified network and a given origin-destination.
 	 * The result is returned according to the attribute "mapParameters" declared as a map in the GAMA model.
