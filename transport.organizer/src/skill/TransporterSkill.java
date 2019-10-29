@@ -171,7 +171,7 @@ public class TransporterSkill extends Skill{
 
 		// Il y a déjà eu un départ, mais il n'y en a pas d'autres de prévu
 		if(lastDepartureDate != null && vehicles.size() == 0) {
-			// on pars donc dès que possible après lastDepartureDate, mais quand exactement ?
+			// on part donc dès que possible après lastDepartureDate, mais quand exactement ?
 
 			// Est-ce qu'il y a eu un départ vers cette destination ? Et est ce qu'on a des restriction pour cette destination?
 			if( lastDepartureDateDest != null && timeBetweenVehicleDest != -1) {
@@ -462,7 +462,7 @@ public class TransporterSkill extends Skill{
 	 * @param dest
 	 * @return
 	 */
-	public static Double getTimeBeweenVehicleDest(final IScope scope, IAgent transporter, IAgent source, IAgent dest) {
+	protected static Double getTimeBeweenVehicleDest(final IScope scope, IAgent transporter, IAgent source, IAgent dest) {
 		GamaMap mapParameters = (GamaMap) scope.getSimulation().getAttribute("mapParameters");
 		Double timeBetweenVehicles = null;
 		String sourceName = (String) source.getAttribute("cityName");
