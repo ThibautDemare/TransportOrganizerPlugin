@@ -441,8 +441,8 @@ public class TransporterSkill extends Skill{
 	 * {
 	 * 		"id_terminale_origin" : {
 	 * 			"id_terminale_dest" : {
-	 * 				"handling_time_maritime":4,
-	 * 				"handling_time_river":3,
+	 * 				"timeBetweenVehicles_maritime":4,
+	 * 				"timeBetweenVehicles_river":3,
 	 * 			}
 	 * 		}
 	 * }
