@@ -76,7 +76,7 @@ public class TransportOrganizerSkill extends Skill {
 	 * Static methods
 	 */
 
-	public IAgent getTransporter(final IScope scope, String graphType){
+	protected IAgent getTransporter(final IScope scope, String graphType){
 		return (IAgent) getCurrentAgent(scope).getAttribute("transporter_"+graphType);
 	}
 
