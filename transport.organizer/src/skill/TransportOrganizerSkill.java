@@ -63,7 +63,7 @@ public class TransportOrganizerSkill extends Skill {
 	// Therefore, this plugin can be used with simulation executed in parallel.
 	private static DataSimulation currentSimulation;
 
-	public void getCurrentSimulation(final IScope scope) {
+	private void getCurrentSimulation(final IScope scope) {
 		currentSimulation = (DataSimulation) scope.getSimulation().getAttribute("gaml.extensions.transport.organizer.dataSimulation");
 		if(currentSimulation == null) {
 			currentSimulation = new DataSimulation();
