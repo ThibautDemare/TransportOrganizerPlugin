@@ -603,7 +603,7 @@ public class TransportOrganizerSkill extends Skill {
 				@arg(name = IKeywordTOAdditional.COMMODITY, type = IType.AGENT , optional = false, doc = @doc("the commodities to transport.")),
 		},
 		doc =	@doc(value = "Compute a shortest path between two nodes and return the path length.", returns = "the path length.",
-					examples = { @example("do get_shortest_path_length origin:my_origin_agent destination:my_destination_agent strategy:'travel_time' commodity:my_commodity;") })
+					examples = { @example("path length <- get_shortest_path_length origin:my_origin_agent destination:my_destination_agent strategy:'travel_time' commodity:my_commodity;") })
 	)
 	public double getPathTimeLength(final IScope scope) throws GamaRuntimeException {
 		getCurrentSimulation(scope);
