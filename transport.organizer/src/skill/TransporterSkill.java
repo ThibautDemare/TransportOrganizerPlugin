@@ -21,7 +21,7 @@ import msi.gaml.skills.Skill;
 @skill(name = IKeywordTOAdditional.TRANSPORTER)
 public class TransporterSkill extends Skill{
 
-	public static double getVolumeKilometerCosts(final IScope scope, IAgent transporter){
+	protected static double getVolumeKilometerCosts(final IScope scope, IAgent transporter){
 		return (double) transporter.getAttribute("volumeKilometersCosts");
 	}
 
